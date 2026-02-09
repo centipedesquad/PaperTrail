@@ -45,3 +45,4 @@ htmlcov/
 
 # Internal planning documents (not for repo)
 IMPLEMENTATION.md
+BUGS.md

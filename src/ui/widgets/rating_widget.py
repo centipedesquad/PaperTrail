@@ -35,13 +35,16 @@ class RatingWidget(QWidget):
 
     def _setup_ui(self):
         """Setup UI components."""
+        from ui.theme import get_theme_manager
+        theme = get_theme_manager()
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 5, 0, 5)
         layout.setSpacing(10)
 
         # Title
         title_label = QLabel("Rate this paper:")
-        title_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
+        title_label.setStyleSheet(f"font-weight: bold; color: {theme.get_color('text_primary')};")
         layout.addWidget(title_label)
 
         # Importance
@@ -89,20 +92,27 @@ class RatingWidget(QWidget):
 
         layout.addLayout(technicality_layout)
 
-        # Style the combos
-        combo_style = """
-            QComboBox {
+        # Style the combos with theme colors
+        combo_style = f"""
+            QComboBox {{
                 padding: 5px;
-                border: 1px solid #ccc;
+                border: 1px solid {theme.get_color('border')};
                 border-radius: 3px;
-                background-color: white;
-            }
-            QComboBox:hover {
-                border-color: #4a90e2;
-            }
-            QComboBox::drop-down {
+                background-color: {theme.get_color('surface')};
+                color: {theme.get_color('text_primary')};
+            }}
+            QComboBox:hover {{
+                border-color: {theme.get_color('primary')};
+            }}
+            QComboBox::drop-down {{
                 border: none;
-            }
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {theme.get_color('surface')};
+                color: {theme.get_color('text_primary')};
+                selection-background-color: {theme.get_color('primary')};
+                selection-color: white;
+            }}
         """
         self.importance_combo.setStyleSheet(combo_style)
         self.comprehension_combo.setStyleSheet(combo_style)

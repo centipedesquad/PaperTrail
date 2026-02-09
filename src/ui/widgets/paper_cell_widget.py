@@ -150,25 +150,49 @@ class PaperCellWidget(QWidget):
         )
         content_layout.addWidget(abstract_label)
 
-        # Rating indicators (if rated)
-        if self.paper.ratings:
-            rating_text = "<b>Ratings:</b> "
-            if self.paper.ratings.importance:
-                rating_text += f"Importance: {self.paper.ratings.importance} | "
-            if self.paper.ratings.comprehension:
-                rating_text += f"Comprehension: {self.paper.ratings.comprehension} | "
-            if self.paper.ratings.technicality:
-                rating_text += f"Technicality: {self.paper.ratings.technicality}"
-            rating_label = QLabel(rating_text)
+        # Rating indicators (if rated) - spread across width with different colors
+        if self.paper.ratings and (self.paper.ratings.importance or
+                                   self.paper.ratings.comprehension or
+                                   self.paper.ratings.technicality):
+            ratings_layout = QHBoxLayout()
+            ratings_layout.setSpacing(20)
+            ratings_layout.setContentsMargins(0, 4, 0, 0)
+
             rating_font = QFont()
             rating_font.setPointSize(base_font_size)
-            rating_label.setFont(rating_font)
-            rating_label.setStyleSheet(
-                f"color: {theme.get_color('success')}; "
-                f"border: none; "
-                f"background: transparent;"
-            )
-            content_layout.addWidget(rating_label)
+
+            # Importance (primary color)
+            if self.paper.ratings.importance:
+                importance_label = QLabel(f"Importance: {self.paper.ratings.importance}")
+                importance_label.setFont(rating_font)
+                importance_label.setStyleSheet(
+                    f"color: {theme.get_color('primary')}; "
+                    f"border: none; background: transparent;"
+                )
+                ratings_layout.addWidget(importance_label)
+
+            # Comprehension (success color)
+            if self.paper.ratings.comprehension:
+                comprehension_label = QLabel(f"Comprehension: {self.paper.ratings.comprehension}")
+                comprehension_label.setFont(rating_font)
+                comprehension_label.setStyleSheet(
+                    f"color: {theme.get_color('success')}; "
+                    f"border: none; background: transparent;"
+                )
+                ratings_layout.addWidget(comprehension_label)
+
+            # Technicality (warning color)
+            if self.paper.ratings.technicality:
+                technicality_label = QLabel(f"Technicality: {self.paper.ratings.technicality}")
+                technicality_label.setFont(rating_font)
+                technicality_label.setStyleSheet(
+                    f"color: {theme.get_color('warning')}; "
+                    f"border: none; background: transparent;"
+                )
+                ratings_layout.addWidget(technicality_label)
+
+            ratings_layout.addStretch()
+            content_layout.addLayout(ratings_layout)
 
         # Action buttons
         buttons_layout = QHBoxLayout()
@@ -182,12 +206,13 @@ class PaperCellWidget(QWidget):
         view_pdf_btn.setStyleSheet(theme.get_widget_style('button_primary'))
         buttons_layout.addWidget(view_pdf_btn)
 
-        self.notes_btn = QPushButton("Notes")
-        self.notes_btn.setFixedHeight(28)
-        self.notes_btn.setMinimumWidth(80)
-        self.notes_btn.clicked.connect(self._toggle_notes)
-        self.notes_btn.setStyleSheet(theme.get_widget_style('button_secondary'))
-        buttons_layout.addWidget(self.notes_btn)
+        # Notes button - commented out per user request
+        # self.notes_btn = QPushButton("Notes")
+        # self.notes_btn.setFixedHeight(28)
+        # self.notes_btn.setMinimumWidth(80)
+        # self.notes_btn.clicked.connect(self._toggle_notes)
+        # self.notes_btn.setStyleSheet(theme.get_widget_style('button_secondary'))
+        # buttons_layout.addWidget(self.notes_btn)
 
         self.rating_btn = QPushButton("Rate Paper")
         self.rating_btn.setFixedHeight(28)
@@ -212,14 +237,14 @@ class PaperCellWidget(QWidget):
             )
         content_layout.addWidget(self.rating_widget)
 
-        # Inline note editor (hidden by default)
-        self.note_editor = NoteEditorWidget()
-        self.note_editor.setVisible(False)
-        self.note_editor.note_changed.connect(self._on_note_changed)
-        # Load existing note
-        if self.paper.notes and self.paper.notes.note_text:
-            self.note_editor.set_note(self.paper.notes.note_text)
-        content_layout.addWidget(self.note_editor)
+        # Inline note editor - commented out per user request
+        # self.note_editor = NoteEditorWidget()
+        # self.note_editor.setVisible(False)
+        # self.note_editor.note_changed.connect(self._on_note_changed)
+        # # Load existing note
+        # if self.paper.notes and self.paper.notes.note_text:
+        #     self.note_editor.set_note(self.paper.notes.note_text)
+        # content_layout.addWidget(self.note_editor)
 
         container_layout.addWidget(self.content_widget)
 
@@ -249,22 +274,22 @@ class PaperCellWidget(QWidget):
         self.rating_visible = not self.rating_visible
         self.rating_widget.setVisible(self.rating_visible)
 
-        # Update button text
+        # Update button text (no emojis per user preference)
         if self.rating_visible:
-            self.rating_btn.setText("⭐ Hide Rating")
+            self.rating_btn.setText("Hide Rating")
         else:
-            self.rating_btn.setText("⭐ Rate Paper")
+            self.rating_btn.setText("Rate Paper")
 
-    def _toggle_notes(self):
-        """Toggle notes editor visibility."""
-        self.notes_visible = not self.notes_visible
-        self.note_editor.setVisible(self.notes_visible)
-
-        # Update button text
-        if self.notes_visible:
-            self.notes_btn.setText("✏️ Hide Notes")
-        else:
-            self.notes_btn.setText("✏️ Add/Edit Notes")
+    # def _toggle_notes(self):
+    #     """Toggle notes editor visibility."""
+    #     self.notes_visible = not self.notes_visible
+    #     self.note_editor.setVisible(self.notes_visible)
+    #
+    #     # Update button text
+    #     if self.notes_visible:
+    #         self.notes_btn.setText("✏️ Hide Notes")
+    #     else:
+    #         self.notes_btn.setText("✏️ Add/Edit Notes")
 
     def _on_rating_changed(self, importance: str, comprehension: str, technicality: str):
         """Handle rating change."""
