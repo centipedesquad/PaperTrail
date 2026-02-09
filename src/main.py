@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 from PySide6.QtWidgets import QApplication, QMessageBox, QFileDialog
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont
 
 # Add src directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -176,6 +177,13 @@ def main():
 
         # Save data directory to settings
         config_service.set_database_location(data_dir)
+
+        # Apply font size setting
+        base_font_size = config_service.get_font_size()
+        app_font = app.font()
+        app_font.setPointSize(base_font_size)
+        app.setFont(app_font)
+        logger.info(f"Applied base font size: {base_font_size}pt")
 
         # Initialize and apply theme
         theme_manager = get_theme_manager()

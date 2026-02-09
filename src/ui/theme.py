@@ -479,7 +479,6 @@ class ThemeManager:
                     padding: 4px 12px;
                     border-radius: 4px;
                     font-weight: 500;
-                    font-size: 10pt;
                 }}
                 QPushButton:hover {{
                     background-color: {self.get_color('primary_hover')};
@@ -496,7 +495,6 @@ class ThemeManager:
                     padding: 4px 12px;
                     border-radius: 4px;
                     font-weight: 500;
-                    font-size: 10pt;
                 }}
                 QPushButton:hover {{
                     background-color: {self.get_color('success_hover')};
@@ -513,7 +511,6 @@ class ThemeManager:
                     padding: 4px 12px;
                     border-radius: 4px;
                     font-weight: 500;
-                    font-size: 10pt;
                 }}
                 QPushButton:hover {{
                     background-color: {self.get_color('secondary_hover')};

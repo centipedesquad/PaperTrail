@@ -6,7 +6,7 @@ Displays paper information in an expandable card.
 import logging
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QFrame, QSizePolicy
+    QPushButton, QFrame, QSizePolicy, QApplication
 )
 from PySide6.QtCore import Qt, Signal, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QFont, QCursor
@@ -49,8 +49,9 @@ class PaperCellWidget(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 8)  # Bottom margin for spacing between cells
         main_layout.setSpacing(0)
 
-        # Get theme manager
+        # Get theme manager and base font size
         theme = get_theme_manager()
+        base_font_size = QApplication.instance().font().pointSize()
 
         # Container frame with border
         self.container = QFrame()
@@ -71,14 +72,14 @@ class PaperCellWidget(QWidget):
         self.arrow_label = QLabel("▶")  # Start collapsed
         self.arrow_label.setFixedWidth(25)
         arrow_font = QFont()
-        arrow_font.setPointSize(11)
+        arrow_font.setPointSize(base_font_size)
         self.arrow_label.setFont(arrow_font)
         header_layout.addWidget(self.arrow_label)
 
         # Title
         title_label = QLabel(self.paper.title)
         title_font = QFont()
-        title_font.setPointSize(14)  # Larger, more readable
+        title_font.setPointSize(int(base_font_size * 1.27))  # ~27% larger than base (14pt when base is 11pt)
         title_font.setBold(True)
         title_label.setFont(title_font)
         title_label.setWordWrap(True)
@@ -105,7 +106,7 @@ class PaperCellWidget(QWidget):
         authors_label = QLabel(f"<b>Authors:</b> {authors_text}")
         authors_label.setWordWrap(True)
         authors_font = QFont()
-        authors_font.setPointSize(11)
+        authors_font.setPointSize(base_font_size)
         authors_label.setFont(authors_font)
         authors_label.setStyleSheet(
             f"color: {theme.get_color('text_secondary')}; "
@@ -122,7 +123,7 @@ class PaperCellWidget(QWidget):
         meta_label = QLabel(meta_text)
         meta_label.setWordWrap(True)
         meta_font = QFont()
-        meta_font.setPointSize(10)
+        meta_font.setPointSize(int(base_font_size * 0.91))  # ~9% smaller than base (10pt when base is 11pt)
         meta_label.setFont(meta_font)
         meta_label.setStyleSheet(
             f"color: {theme.get_color('text_secondary')}; "
@@ -138,7 +139,7 @@ class PaperCellWidget(QWidget):
         abstract_label = QLabel(f"<b>Abstract:</b> {abstract_text}")
         abstract_label.setWordWrap(True)
         abstract_font = QFont()
-        abstract_font.setPointSize(11)
+        abstract_font.setPointSize(base_font_size)
         abstract_label.setFont(abstract_font)
         abstract_label.setStyleSheet(
             f"color: {theme.get_color('text_primary')}; "
@@ -160,7 +161,7 @@ class PaperCellWidget(QWidget):
                 rating_text += f"Technicality: {self.paper.ratings.technicality}"
             rating_label = QLabel(rating_text)
             rating_font = QFont()
-            rating_font.setPointSize(11)
+            rating_font.setPointSize(base_font_size)
             rating_label.setFont(rating_font)
             rating_label.setStyleSheet(
                 f"color: {theme.get_color('success')}; "
