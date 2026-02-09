@@ -234,10 +234,10 @@ class MainWindow(QMainWindow):
 
     def _fetch_papers(self):
         """Open fetch papers dialog."""
-        dialog = FetchPapersDialog(self)
-        dialog.fetch_requested.connect(self._start_fetch)
+        self.fetch_dialog = FetchPapersDialog(self)
+        self.fetch_dialog.fetch_requested.connect(self._start_fetch)
 
-        dialog.exec()
+        self.fetch_dialog.exec()
 
     def _start_fetch(self, mode: str, categories: list, max_results: int, days: int):
         """
@@ -273,6 +273,9 @@ class MainWindow(QMainWindow):
     def _on_fetch_progress(self, percentage: int, message: str):
         """Handle fetch progress updates."""
         self._update_statusbar(message)
+        # Update dialog if it exists
+        if hasattr(self, 'fetch_dialog') and self.fetch_dialog:
+            self.fetch_dialog.set_progress(percentage, message)
 
     def _on_fetch_finished(self, result: dict):
         """Handle fetch completion."""
@@ -280,6 +283,10 @@ class MainWindow(QMainWindow):
             f"Fetched {result['created']} new papers ({result['duplicates']} duplicates)",
             5000
         )
+
+        # Update dialog if it exists
+        if hasattr(self, 'fetch_dialog') and self.fetch_dialog:
+            self.fetch_dialog.fetch_complete(result)
 
         # Reload categories (new categories may have been added)
         self._load_categories()
@@ -291,11 +298,17 @@ class MainWindow(QMainWindow):
     def _on_fetch_error(self, error: str):
         """Handle fetch error."""
         self._update_statusbar("Fetch failed", 5000)
-        QMessageBox.critical(
-            self,
-            "Fetch Error",
-            f"Failed to fetch papers:\n\n{error}"
-        )
+
+        # Update dialog if it exists
+        if hasattr(self, 'fetch_dialog') and self.fetch_dialog:
+            self.fetch_dialog.fetch_failed(error)
+        else:
+            # Show error if dialog is not available
+            QMessageBox.critical(
+                self,
+                "Fetch Error",
+                f"Failed to fetch papers:\n\n{error}"
+            )
 
     def _load_categories(self):
         """Load categories into filter panel."""
