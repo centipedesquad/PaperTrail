@@ -40,9 +40,10 @@ class ArxivClient:
 
                 # Query for papers in this category, sorted by submission date
                 # Fetch extra to account for cross-listed papers we'll filter out
+                # Reduced multiplier to avoid rate limiting
                 search = arxiv.Search(
                     query=f"cat:{category}",
-                    max_results=max_results * 5,  # Fetch 5x since we'll filter for primary only
+                    max_results=max_results * 2,  # Fetch 2x since we'll filter for primary only
                     sort_by=arxiv.SortCriterion.SubmittedDate,
                     sort_order=arxiv.SortOrder.Descending
                 )
@@ -63,7 +64,11 @@ class ArxivClient:
                 papers.extend(category_papers)
 
             except Exception as e:
-                logger.error(f"Failed to fetch papers from {category}: {e}")
+                error_msg = str(e)
+                logger.error(f"Failed to fetch papers from {category}: {error_msg}")
+                # Check if it's a rate limit error
+                if "429" in error_msg:
+                    raise Exception("arXiv API rate limit reached. Please wait 3-5 minutes before trying again.")
                 # Continue with other categories
 
         logger.info(f"Fetched {len(papers)} papers total")
