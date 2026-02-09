@@ -31,28 +31,40 @@ class ArxivClient:
             List of paper dictionaries
         """
         papers = []
+        today = datetime.now().date()
 
         for category in categories:
             try:
                 logger.info(f"Fetching new papers from category: {category}")
 
                 # Query for papers in this category, sorted by submission date
+                # Fetch more than needed to ensure we get all of today's papers
                 search = arxiv.Search(
                     query=f"cat:{category}",
-                    max_results=max_results,
+                    max_results=max_results * 3,  # Fetch 3x to ensure we get all of today's papers
                     sort_by=arxiv.SortCriterion.SubmittedDate,
                     sort_order=arxiv.SortOrder.Descending
                 )
 
+                category_papers = []
                 for result in search.results():
-                    paper = self._convert_result_to_dict(result)
-                    papers.append(paper)
+                    # Only include papers published today
+                    paper_date = result.published.date()
+                    if paper_date == today:
+                        paper = self._convert_result_to_dict(result)
+                        category_papers.append(paper)
+                    elif paper_date < today:
+                        # We've gone past today's papers, stop searching
+                        break
+
+                logger.info(f"Found {len(category_papers)} papers from {category} published today")
+                papers.extend(category_papers)
 
             except Exception as e:
                 logger.error(f"Failed to fetch papers from {category}: {e}")
                 # Continue with other categories
 
-        logger.info(f"Fetched {len(papers)} papers total")
+        logger.info(f"Fetched {len(papers)} papers total from today")
         return papers
 
     def fetch_recent_papers(
