@@ -82,7 +82,12 @@ class PaperCellWidget(QWidget):
         title_font.setBold(True)
         title_label.setFont(title_font)
         title_label.setWordWrap(True)
-        title_label.setStyleSheet(f"color: {theme.get_color('text_primary')}; line-height: 1.4;")
+        title_label.setStyleSheet(
+            f"color: {theme.get_color('text_primary')}; "
+            f"line-height: 1.4; "
+            f"border: none; "
+            f"background: transparent;"
+        )
         header_layout.addWidget(title_label, 1)
 
         container_layout.addWidget(header_widget)
@@ -102,7 +107,11 @@ class PaperCellWidget(QWidget):
         authors_font = QFont()
         authors_font.setPointSize(11)
         authors_label.setFont(authors_font)
-        authors_label.setStyleSheet(f"color: {theme.get_color('text_secondary')};")
+        authors_label.setStyleSheet(
+            f"color: {theme.get_color('text_secondary')}; "
+            f"border: none; "
+            f"background: transparent;"
+        )
         content_layout.addWidget(authors_label)
 
         # Metadata (arXiv ID, categories, date)
@@ -115,7 +124,11 @@ class PaperCellWidget(QWidget):
         meta_font = QFont()
         meta_font.setPointSize(10)
         meta_label.setFont(meta_font)
-        meta_label.setStyleSheet(f"color: {theme.get_color('text_secondary')};")
+        meta_label.setStyleSheet(
+            f"color: {theme.get_color('text_secondary')}; "
+            f"border: none; "
+            f"background: transparent;"
+        )
         content_layout.addWidget(meta_label)
 
         # Abstract (truncated with better length)
@@ -129,7 +142,10 @@ class PaperCellWidget(QWidget):
         abstract_label.setFont(abstract_font)
         abstract_label.setStyleSheet(
             f"color: {theme.get_color('text_primary')}; "
-            f"line-height: 1.5; padding-top: 4px;"
+            f"line-height: 1.5; "
+            f"padding-top: 4px; "
+            f"border: none; "
+            f"background: transparent;"
         )
         content_layout.addWidget(abstract_label)
 
@@ -146,7 +162,11 @@ class PaperCellWidget(QWidget):
             rating_font = QFont()
             rating_font.setPointSize(11)
             rating_label.setFont(rating_font)
-            rating_label.setStyleSheet(f"color: {theme.get_color('success')};")
+            rating_label.setStyleSheet(
+                f"color: {theme.get_color('success')}; "
+                f"border: none; "
+                f"background: transparent;"
+            )
             content_layout.addWidget(rating_label)
 
         # Action buttons
@@ -154,23 +174,23 @@ class PaperCellWidget(QWidget):
         buttons_layout.setSpacing(12)
         buttons_layout.setContentsMargins(0, 8, 0, 0)  # Add top spacing
 
-        view_pdf_btn = QPushButton("📄 View PDF")
+        view_pdf_btn = QPushButton("View PDF")
         view_pdf_btn.setMinimumHeight(32)
-        view_pdf_btn.setMinimumWidth(120)
+        view_pdf_btn.setMinimumWidth(110)
         view_pdf_btn.clicked.connect(lambda: self.view_pdf_clicked.emit(self.paper.id))
         view_pdf_btn.setStyleSheet(theme.get_widget_style('button_primary'))
         buttons_layout.addWidget(view_pdf_btn)
 
-        self.notes_btn = QPushButton("✏️ Notes")
+        self.notes_btn = QPushButton("Notes")
         self.notes_btn.setMinimumHeight(32)
-        self.notes_btn.setMinimumWidth(100)
+        self.notes_btn.setMinimumWidth(90)
         self.notes_btn.clicked.connect(self._toggle_notes)
         self.notes_btn.setStyleSheet(theme.get_widget_style('button_secondary'))
         buttons_layout.addWidget(self.notes_btn)
 
-        self.rating_btn = QPushButton("⭐ Rate")
+        self.rating_btn = QPushButton("Rate Paper")
         self.rating_btn.setMinimumHeight(32)
-        self.rating_btn.setMinimumWidth(100)
+        self.rating_btn.setMinimumWidth(110)
         self.rating_btn.clicked.connect(self._toggle_rating)
         self.rating_btn.setStyleSheet(theme.get_widget_style('button_success'))
         buttons_layout.addWidget(self.rating_btn)
