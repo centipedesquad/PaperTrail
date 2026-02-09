@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# py2app
+*.app/
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# myArXiv specific
+data/
+myarxiv.db*
+test_db.sqlite*
+*.log
+.myarxiv_config
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Claude Code
+.claude/
+
+# Internal planning documents (not for repo)
+IMPLEMENTATION.md
