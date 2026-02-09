@@ -117,6 +117,15 @@ class PaperService:
         """
         return self.paper_repo.get_all_categories()
 
+    def get_category_counts(self) -> dict:
+        """
+        Get paper counts for each category.
+
+        Returns:
+            Dictionary of {category_code: paper_count}
+        """
+        return self.paper_repo.get_category_counts()
+
     def update_pdf_path(self, paper_id: int, pdf_path: str):
         """Update local PDF path for a paper."""
         self.paper_repo.update_local_pdf_path(paper_id, pdf_path)

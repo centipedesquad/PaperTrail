@@ -314,8 +314,9 @@ class MainWindow(QMainWindow):
         """Load categories into filter panel."""
         try:
             categories = self.paper_service.get_all_categories()
-            self.filter_panel.set_categories(categories)
-            logger.info(f"Loaded {len(categories)} categories")
+            category_counts = self.paper_service.get_category_counts()
+            self.filter_panel.set_categories(categories, category_counts)
+            logger.info(f"Loaded {len(categories)} categories with counts")
         except Exception as e:
             logger.error(f"Failed to load categories: {e}")
 

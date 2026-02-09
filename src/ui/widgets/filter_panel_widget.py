@@ -22,6 +22,16 @@ class FilterPanelWidget(QWidget):
     # Signal emitted when filters change
     filters_changed = Signal(dict)  # filter_dict
 
+    # Category groups for hierarchical display
+    CATEGORY_GROUPS = {
+        'Physics': ['hep-th', 'hep-ph', 'hep-ex', 'hep-lat', 'gr-qc', 'quant-ph', 'nucl-th', 'nucl-ex', 'physics'],
+        'Condensed Matter': ['cond-mat', 'cond-mat.stat-mech', 'cond-mat.str-el', 'cond-mat.mes-hall',
+                             'cond-mat.mtrl-sci', 'cond-mat.soft', 'cond-mat.supr-con', 'cond-mat.dis-nn', 'cond-mat.quant-gas'],
+        'Astrophysics': ['astro-ph', 'astro-ph.CO', 'astro-ph.HE', 'astro-ph.GA', 'astro-ph.SR', 'astro-ph.IM', 'astro-ph.EP'],
+        'Mathematics': ['math', 'math.DG', 'math.AG', 'math.AT', 'math.AP', 'math.CT', 'math.CO', 'math-ph'],
+        'Computer Science': ['cs', 'cs.AI', 'cs.LG', 'cs.CL', 'cs.CV', 'cs.NE', 'cs.IT'],
+    }
+
     def __init__(self, parent=None):
         """
         Initialize filter panel widget.
@@ -32,6 +42,8 @@ class FilterPanelWidget(QWidget):
         super().__init__(parent)
         self.available_categories = []
         self.category_checkboxes = {}
+        self.category_groups_widgets = {}
+        self.my_categories_group = None
         self._setup_ui()
 
     def _setup_ui(self):
@@ -69,9 +81,16 @@ class FilterPanelWidget(QWidget):
 
         container_layout.addWidget(search_group)
 
-        # Categories filter
+        # Categories filter - hierarchical with search
         self.categories_group = QGroupBox("Categories")
         self.categories_layout = QVBoxLayout(self.categories_group)
+        self.categories_layout.setSpacing(8)
+
+        # Category search box
+        self.category_search = QLineEdit()
+        self.category_search.setPlaceholderText("Search categories...")
+        self.category_search.textChanged.connect(self._on_category_search_changed)
+        self.categories_layout.addWidget(self.category_search)
 
         # "All Categories" checkbox
         self.all_categories_cb = QCheckBox("All Categories")
@@ -79,7 +98,23 @@ class FilterPanelWidget(QWidget):
         self.all_categories_cb.stateChanged.connect(self._on_all_categories_changed)
         self.categories_layout.addWidget(self.all_categories_cb)
 
-        # Category checkboxes will be added dynamically
+        # Scroll area for category groups
+        categories_scroll = QScrollArea()
+        categories_scroll.setWidgetResizable(True)
+        categories_scroll.setFrameShape(QScrollArea.NoFrame)
+        categories_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        categories_scroll.setMaximumHeight(300)
+
+        self.categories_container = QWidget()
+        self.categories_container_layout = QVBoxLayout(self.categories_container)
+        self.categories_container_layout.setContentsMargins(0, 0, 0, 0)
+        self.categories_container_layout.setSpacing(5)
+        self.categories_container_layout.setAlignment(Qt.AlignTop)
+
+        # Category groups will be added dynamically
+
+        categories_scroll.setWidget(self.categories_container)
+        self.categories_layout.addWidget(categories_scroll)
 
         container_layout.addWidget(self.categories_group)
 
@@ -195,29 +230,242 @@ class FilterPanelWidget(QWidget):
             }}
         """ + theme.get_widget_style('filter_panel'))
 
-    def set_categories(self, categories: List[tuple]):
+    def _get_category_group(self, code: str) -> Optional[str]:
         """
-        Set available categories.
+        Determine which group a category belongs to using prefix matching.
+
+        Args:
+            code: Category code (e.g., 'math.QA', 'physics.optics')
+
+        Returns:
+            Group name or None if no match
+        """
+        # First check explicit matches
+        for group_name, group_codes in self.CATEGORY_GROUPS.items():
+            if code in group_codes:
+                return group_name
+
+        # Then check prefix matches
+        # math, math.* -> Mathematics
+        if code == 'math' or code.startswith('math.') or code == 'math-ph':
+            return 'Mathematics'
+        # physics, physics.* -> Physics
+        if code == 'physics' or code.startswith('physics.'):
+            return 'Physics'
+        # cs, cs.* -> Computer Science
+        if code == 'cs' or code.startswith('cs.'):
+            return 'Computer Science'
+        # astro-ph, astro-ph.* -> Astrophysics
+        if code == 'astro-ph' or code.startswith('astro-ph.'):
+            return 'Astrophysics'
+        # cond-mat, cond-mat.* -> Condensed Matter
+        if code == 'cond-mat' or code.startswith('cond-mat.'):
+            return 'Condensed Matter'
+        # hep-*, gr-qc, quant-ph, nucl-*, physics -> Physics (already covered by explicit matching mostly)
+        if any(code.startswith(prefix) for prefix in ['hep-', 'nucl-']):
+            return 'Physics'
+        if code in ['gr-qc', 'quant-ph']:
+            return 'Physics'
+
+        return None
+
+    def set_categories(self, categories: List[tuple], category_counts: dict = None):
+        """
+        Set available categories with hierarchical grouping.
 
         Args:
             categories: List of (code, name) tuples
+            category_counts: Optional dict of {code: count} for "My Categories"
         """
+        logger.info(f"set_categories called with {len(categories)} categories and counts: {bool(category_counts)}")
         self.available_categories = categories
+        category_counts = category_counts or {}
+        logger.info(f"Category counts: {category_counts}")
 
-        # Clear existing checkboxes (except "All Categories")
+        # Clear existing widgets
         for cb in self.category_checkboxes.values():
             cb.deleteLater()
         self.category_checkboxes.clear()
 
-        # Add checkboxes for each category
-        for code, name in sorted(categories, key=lambda x: x[0]):
-            cb = QCheckBox(f"{code} - {name}")
+        for widget in self.category_groups_widgets.values():
+            widget.deleteLater()
+        self.category_groups_widgets.clear()
+
+        # Create hierarchical category groups
+        logger.info("Creating hierarchical category groups")
+
+        # Group categories by their group name
+        grouped_categories = {}
+        ungrouped_categories = []
+
+        for code, name in categories:
+            group_name = self._get_category_group(code)
+            if group_name:
+                if group_name not in grouped_categories:
+                    grouped_categories[group_name] = []
+                grouped_categories[group_name].append((code, name))
+            else:
+                ungrouped_categories.append((code, name))
+
+        # Create groups in the order defined in CATEGORY_GROUPS
+        for group_name in self.CATEGORY_GROUPS.keys():
+            if group_name in grouped_categories:
+                logger.info(f"Creating group '{group_name}' with {len(grouped_categories[group_name])} categories")
+                self._create_category_group(group_name, grouped_categories[group_name], category_counts)
+
+        # Add "Other" group for ungrouped categories
+        if ungrouped_categories:
+            logger.info(f"Creating 'Other' group with {len(ungrouped_categories)} categories")
+            self._create_category_group("Other", ungrouped_categories, category_counts, collapsed=True)
+
+        logger.info(f"Set {len(categories)} categories in hierarchical filter panel")
+
+    def _create_my_categories_group(self, categories: List[tuple], counts: dict):
+        """Create 'My Categories' group with paper counts."""
+        from PySide6.QtWidgets import QToolButton
+
+        # Container for the group
+        group_widget = QWidget()
+        group_layout = QVBoxLayout(group_widget)
+        group_layout.setContentsMargins(0, 0, 0, 10)
+        group_layout.setSpacing(8)
+
+        # Collapsible header
+        header = QToolButton()
+        header.setText(f"▼ My Categories ({len(categories)})")
+        header.setCheckable(True)
+        header.setChecked(True)
+        header.setStyleSheet("QToolButton { border: none; font-weight: bold; text-align: left; }")
+        header.setToolButtonStyle(Qt.ToolButtonTextOnly)
+
+        # Content widget
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(15, 8, 0, 8)
+        content_layout.setSpacing(8)
+
+        # Add checkboxes
+        for code, name, count in sorted(categories, key=lambda x: x[2], reverse=True):
+            cb = QCheckBox(f"{code} ({count})")
+            cb.setToolTip(name)
             cb.setChecked(False)
             cb.stateChanged.connect(self._on_category_changed)
-            self.categories_layout.addWidget(cb)
+            content_layout.addWidget(cb)
             self.category_checkboxes[code] = cb
 
-        logger.info(f"Set {len(categories)} categories in filter panel")
+        # Connect header toggle
+        def toggle_content(checked):
+            content.setVisible(checked)
+            header.setText(f"{'▼' if checked else '▶'} My Categories ({len(categories)})")
+
+        header.toggled.connect(toggle_content)
+
+        group_layout.addWidget(header)
+        group_layout.addWidget(content)
+
+        self.categories_container_layout.addWidget(group_widget)
+        self.category_groups_widgets['my_categories'] = group_widget
+
+    def _create_category_group(self, group_name: str, categories: List[tuple],
+                               category_counts: dict = None, collapsed: bool = True):
+        """Create a collapsible category group."""
+        from PySide6.QtWidgets import QToolButton
+
+        category_counts = category_counts or {}
+
+        # Container for the group
+        group_widget = QWidget()
+        group_layout = QVBoxLayout(group_widget)
+        group_layout.setContentsMargins(0, 0, 0, 10)
+        group_layout.setSpacing(8)
+
+        # Count how many categories in this group have papers
+        group_paper_count = sum(1 for code, _ in categories if code in category_counts and category_counts[code] > 0)
+
+        # Collapsible header
+        header = QToolButton()
+        arrow = '▶' if collapsed else '▼'
+        header_text = f"{arrow} {group_name}"
+        if group_paper_count > 0:
+            header_text += f" ({group_paper_count})"
+        header.setText(header_text)
+        header.setCheckable(True)
+        header.setChecked(not collapsed)
+        header.setStyleSheet("QToolButton { border: none; font-weight: bold; text-align: left; }")
+        header.setToolButtonStyle(Qt.ToolButtonTextOnly)
+
+        # Content widget
+        content = QWidget()
+        content.setVisible(not collapsed)
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(15, 8, 0, 8)
+        content_layout.setSpacing(8)
+
+        # Sort categories: those with papers first (by count desc), then alphabetically
+        def sort_key(cat):
+            code, name = cat
+            count = category_counts.get(code, 0)
+            return (-count if count > 0 else 0, code)
+
+        # Add checkboxes
+        for code, name in sorted(categories, key=sort_key):
+            # Skip if already added
+            if code in self.category_checkboxes:
+                continue
+
+            # Show count if category has papers
+            if code in category_counts and category_counts[code] > 0:
+                cb = QCheckBox(f"{code} ({category_counts[code]})")
+            else:
+                cb = QCheckBox(code)
+
+            cb.setToolTip(f"{code} - {name}")
+            cb.setChecked(False)
+            cb.stateChanged.connect(self._on_category_changed)
+            content_layout.addWidget(cb)
+            self.category_checkboxes[code] = cb
+
+        # Connect header toggle
+        def toggle_content(checked):
+            content.setVisible(checked)
+            header.setText(f"{'▼' if checked else '▶'} {group_name}")
+
+        header.toggled.connect(toggle_content)
+
+        group_layout.addWidget(header)
+        group_layout.addWidget(content)
+
+        self.categories_container_layout.addWidget(group_widget)
+        self.category_groups_widgets[group_name] = group_widget
+
+    def _on_category_search_changed(self, text: str):
+        """Filter visible categories based on search text."""
+        search_text = text.lower()
+
+        for code, cb in self.category_checkboxes.items():
+            # Get full category name from tooltip or text
+            tooltip = cb.toolTip().lower() if cb.toolTip() else ""
+            checkbox_text = cb.text().lower()
+
+            # Show if search matches code or name
+            matches = (not search_text or
+                      search_text in code.lower() or
+                      search_text in checkbox_text or
+                      search_text in tooltip)
+
+            cb.setVisible(matches)
+
+        # Hide empty groups
+        for group_name, group_widget in self.category_groups_widgets.items():
+            if group_name == 'my_categories':
+                continue
+
+            # Check if any checkboxes in this group are visible
+            has_visible = any(cb.isVisible()
+                            for code, cb in self.category_checkboxes.items()
+                            if cb.parent().parent() == group_widget)
+
+            group_widget.setVisible(has_visible or not search_text)
 
     def _on_all_categories_changed(self, state):
         """Handle all categories checkbox change."""

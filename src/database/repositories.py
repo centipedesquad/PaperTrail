@@ -263,6 +263,25 @@ class PaperRepository:
         )
         return [(row['code'], row['name']) for row in rows]
 
+    def get_category_counts(self) -> dict:
+        """
+        Get paper counts for each category.
+
+        Returns:
+            Dictionary of {category_code: paper_count}
+        """
+        rows = self.db.fetch_all(
+            """
+            SELECT c.code, COUNT(DISTINCT pc.paper_id) as count
+            FROM categories c
+            LEFT JOIN paper_categories pc ON c.id = pc.category_id
+            GROUP BY c.code
+            HAVING count > 0
+            ORDER BY count DESC
+            """
+        )
+        return {row['code']: row['count'] for row in rows}
+
     def _get_or_create_author(self, name: str, normalized_name: str) -> int:
         """Get or create author, return author ID."""
         row = self.db.fetch_one(
