@@ -22,8 +22,8 @@ class ArxivClient:
     def fetch_new_papers(self, categories: List[str], max_results: int = 50) -> List[dict]:
         """
         Fetch recent papers from specified categories.
-        Note: arXiv doesn't provide a way to get only "today's" papers via API,
-        so this fetches the most recent papers sorted by submission date.
+        Only fetches papers where the category is the PRIMARY category,
+        matching the behavior of arXiv.org/list/category/new "New submissions".
 
         Args:
             categories: List of arXiv category codes (e.g., ['hep-th', 'gr-qc'])
@@ -39,20 +39,27 @@ class ArxivClient:
                 logger.info(f"Fetching new papers from category: {category}")
 
                 # Query for papers in this category, sorted by submission date
-                # The arXiv API returns most recently submitted/updated papers first
+                # Fetch extra to account for cross-listed papers we'll filter out
                 search = arxiv.Search(
                     query=f"cat:{category}",
-                    max_results=max_results,
+                    max_results=max_results * 5,  # Fetch 5x since we'll filter for primary only
                     sort_by=arxiv.SortCriterion.SubmittedDate,
                     sort_order=arxiv.SortOrder.Descending
                 )
 
                 category_papers = []
                 for result in search.results():
-                    paper = self._convert_result_to_dict(result)
-                    category_papers.append(paper)
+                    # Only include papers where this category is the PRIMARY category
+                    # This matches arXiv.org/list behavior for "New submissions"
+                    if result.primary_category == category:
+                        paper = self._convert_result_to_dict(result)
+                        category_papers.append(paper)
 
-                logger.info(f"Fetched {len(category_papers)} papers from {category}")
+                        # Stop once we have enough papers
+                        if len(category_papers) >= max_results:
+                            break
+
+                logger.info(f"Fetched {len(category_papers)} papers from {category} (primary category only)")
                 papers.extend(category_papers)
 
             except Exception as e:
