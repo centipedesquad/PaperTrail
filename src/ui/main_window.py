@@ -6,7 +6,7 @@ Coordinates all UI components.
 import logging
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QToolBar, QStatusBar, QMessageBox, QSplitter, QLabel, QDialog
+    QToolBar, QStatusBar, QMessageBox, QSplitter, QLabel, QDialog, QApplication
 )
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QKeySequence
@@ -16,6 +16,7 @@ from ui.widgets.filter_panel_widget import FilterPanelWidget
 from ui.dialogs.fetch_papers_dialog import FetchPapersDialog
 from ui.dialogs.pdf_action_dialog import PDFActionDialog
 from utils.async_utils import FetchWorker, PDFDownloadWorker
+from ui.theme import get_theme_manager, ThemeMode
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +129,13 @@ class MainWindow(QMainWindow):
         toggle_filter_action.triggered.connect(self._toggle_filter_panel)
         view_menu.addAction(toggle_filter_action)
 
+        view_menu.addSeparator()
+
+        toggle_theme_action = QAction("Toggle &Theme (Light/Dark)", self)
+        toggle_theme_action.setShortcut(QKeySequence("Ctrl+T"))
+        toggle_theme_action.triggered.connect(self._toggle_theme)
+        view_menu.addAction(toggle_theme_action)
+
         # Papers menu
         papers_menu = menubar.addMenu("&Papers")
 
@@ -197,6 +205,30 @@ class MainWindow(QMainWindow):
     def _toggle_filter_panel(self, checked: bool):
         """Toggle filter panel visibility."""
         self.filter_panel.setVisible(checked)
+
+    def _toggle_theme(self):
+        """Toggle between light and dark theme."""
+        theme_manager = get_theme_manager()
+
+        # Toggle theme
+        if theme_manager.current_mode == ThemeMode.LIGHT:
+            new_mode = ThemeMode.DARK
+            theme_name = 'dark'
+        else:
+            new_mode = ThemeMode.LIGHT
+            theme_name = 'light'
+
+        # Apply new theme
+        theme_manager.set_theme(new_mode)
+        theme_manager.apply_to_app(QApplication.instance())
+
+        # Save preference
+        self.config_service.set_theme(theme_name)
+
+        # Update status bar
+        self._update_statusbar(f"Switched to {theme_name} theme", 2000)
+
+        logger.info(f"Theme toggled to: {theme_name}")
 
     def _fetch_papers(self):
         """Open fetch papers dialog."""

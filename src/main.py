@@ -21,6 +21,7 @@ from services.fetch_service import FetchService
 from services.pdf_service import PDFService
 from utils.platform_utils import get_default_data_dir, cleanup_cache_dir, ensure_directory_exists
 from ui.main_window import MainWindow
+from ui.theme import get_theme_manager, ThemeMode
 
 # Configure logging
 # Use user's home directory for log file (writable location)
@@ -175,6 +176,16 @@ def main():
 
         # Save data directory to settings
         config_service.set_database_location(data_dir)
+
+        # Initialize and apply theme
+        theme_manager = get_theme_manager()
+        theme_preference = config_service.get_theme()
+        if theme_preference == 'dark':
+            theme_manager.set_theme(ThemeMode.DARK)
+        else:
+            theme_manager.set_theme(ThemeMode.LIGHT)
+        theme_manager.apply_to_app(app)
+        logger.info(f"Applied {theme_preference} theme")
 
         # Create and show main window
         main_window = MainWindow(config_service, paper_service, fetch_service, pdf_service)

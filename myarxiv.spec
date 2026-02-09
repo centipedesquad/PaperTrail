@@ -42,6 +42,7 @@ a = Analysis(
         'services.pdf_service',
         'ui',
         'ui.main_window',
+        'ui.theme',
         'ui.widgets',
         'ui.widgets.paper_cell_widget',
         'ui.widgets.paper_feed_widget',
