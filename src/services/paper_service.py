@@ -78,6 +78,7 @@ class PaperService:
         date_to: Optional[str] = None,
         has_pdf: Optional[bool] = None,
         has_rating: Optional[bool] = None,
+        sort_by: str = "date_desc",
         limit: int = 100
     ) -> List[Paper]:
         """
@@ -90,6 +91,7 @@ class PaperService:
             date_to: Filter by publication date
             has_pdf: Filter by local PDF existence
             has_rating: Filter by rating existence
+            sort_by: Sort order (date_desc, date_asc, title_asc, title_desc)
             limit: Maximum results
 
         Returns:
@@ -102,8 +104,18 @@ class PaperService:
             date_to=date_to,
             has_pdf=has_pdf,
             has_rating=has_rating,
+            sort_by=sort_by,
             limit=limit
         )
+
+    def get_all_categories(self) -> List[tuple]:
+        """
+        Get all categories.
+
+        Returns:
+            List of (code, name) tuples
+        """
+        return self.paper_repo.get_all_categories()
 
     def update_pdf_path(self, paper_id: int, pdf_path: str):
         """Update local PDF path for a paper."""

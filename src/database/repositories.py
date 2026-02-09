@@ -164,6 +164,7 @@ class PaperRepository:
         date_to: Optional[str] = None,
         has_pdf: Optional[bool] = None,
         has_rating: Optional[bool] = None,
+        sort_by: str = "date_desc",
         limit: int = 100
     ) -> List[Paper]:
         """
@@ -176,6 +177,7 @@ class PaperRepository:
             date_to: Filter by publication date (YYYY-MM-DD)
             has_pdf: Filter by local PDF existence
             has_rating: Filter by rating existence
+            sort_by: Sort order (date_desc, date_asc, title_asc, title_desc)
             limit: Maximum results
 
         Returns:
@@ -223,11 +225,20 @@ class PaperRepository:
             else:
                 where_clauses.append("id NOT IN (SELECT paper_id FROM paper_ratings)")
 
+        # Determine ORDER BY clause
+        order_clauses = {
+            "date_desc": "publication_date DESC, id DESC",
+            "date_asc": "publication_date ASC, id ASC",
+            "title_asc": "title ASC",
+            "title_desc": "title DESC",
+        }
+        order_by = order_clauses.get(sort_by, "publication_date DESC, id DESC")
+
         # Build final query
         query = "SELECT * FROM papers"
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
-        query += " ORDER BY publication_date DESC, id DESC LIMIT ?"
+        query += f" ORDER BY {order_by} LIMIT ?"
         params.append(limit)
 
         rows = self.db.fetch_all(query, tuple(params))
@@ -239,6 +250,18 @@ class PaperRepository:
             papers.append(paper)
 
         return papers
+
+    def get_all_categories(self) -> List[tuple]:
+        """
+        Get all categories in database.
+
+        Returns:
+            List of (code, name) tuples
+        """
+        rows = self.db.fetch_all(
+            "SELECT code, name FROM categories ORDER BY code"
+        )
+        return [(row['code'], row['name']) for row in rows]
 
     def _get_or_create_author(self, name: str, normalized_name: str) -> int:
         """Get or create author, return author ID."""

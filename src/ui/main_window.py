@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction, QKeySequence
 
 from ui.widgets.paper_feed_widget import PaperFeedWidget
+from ui.widgets.filter_panel_widget import FilterPanelWidget
 from ui.dialogs.fetch_papers_dialog import FetchPapersDialog
 from ui.dialogs.pdf_action_dialog import PDFActionDialog
 from utils.async_utils import FetchWorker, PDFDownloadWorker
@@ -52,7 +53,8 @@ class MainWindow(QMainWindow):
         self._setup_statusbar()
         self._setup_shortcuts()
 
-        # Load initial papers
+        # Load initial papers and categories
+        self._load_categories()
         self._load_papers()
 
         logger.info("Main window initialized")
@@ -71,13 +73,12 @@ class MainWindow(QMainWindow):
         # Create splitter for resizable panels
         splitter = QSplitter(Qt.Horizontal)
 
-        # Filter panel (left side) - will be implemented in Phase 5
-        # For now, just a placeholder
-        filter_panel = QLabel("Filter Panel\n(Coming in Phase 5)")
-        filter_panel.setMinimumWidth(200)
-        filter_panel.setMaximumWidth(300)
-        filter_panel.setStyleSheet("background-color: #f0f0f0; padding: 10px;")
-        splitter.addWidget(filter_panel)
+        # Filter panel (left side)
+        self.filter_panel = FilterPanelWidget()
+        self.filter_panel.setMinimumWidth(200)
+        self.filter_panel.setMaximumWidth(350)
+        self.filter_panel.filters_changed.connect(self._on_filters_changed)
+        splitter.addWidget(self.filter_panel)
 
         # Paper feed (right side)
         self.paper_feed = PaperFeedWidget()
@@ -92,8 +93,7 @@ class MainWindow(QMainWindow):
 
         main_layout.addWidget(splitter)
 
-        # Store references
-        self.filter_panel = filter_panel
+        # Store reference
         self.splitter = splitter
 
     def _setup_menubar(self):
@@ -247,8 +247,12 @@ class MainWindow(QMainWindow):
             5000
         )
 
-        # Refresh paper list
-        self._load_papers()
+        # Reload categories (new categories may have been added)
+        self._load_categories()
+
+        # Refresh paper list with current filters
+        filters = self.filter_panel.get_filters()
+        self._load_papers(filters)
 
     def _on_fetch_error(self, error: str):
         """Handle fetch error."""
@@ -259,15 +263,47 @@ class MainWindow(QMainWindow):
             f"Failed to fetch papers:\n\n{error}"
         )
 
-    def _load_papers(self):
-        """Load papers from database and display in feed."""
+    def _load_categories(self):
+        """Load categories into filter panel."""
         try:
-            papers = self.paper_service.get_all_papers(limit=100)
+            categories = self.paper_service.get_all_categories()
+            self.filter_panel.set_categories(categories)
+            logger.info(f"Loaded {len(categories)} categories")
+        except Exception as e:
+            logger.error(f"Failed to load categories: {e}")
+
+    def _load_papers(self, filters: dict = None):
+        """
+        Load papers from database and display in feed.
+
+        Args:
+            filters: Optional filter dictionary
+        """
+        try:
+            if filters:
+                # Apply filters
+                papers = self.paper_service.search_papers(
+                    search_text=filters.get('search_text'),
+                    categories=filters.get('categories'),
+                    date_from=filters.get('date_from'),
+                    date_to=filters.get('date_to'),
+                    has_pdf=filters.get('has_pdf'),
+                    has_rating=filters.get('has_rating'),
+                    sort_by=filters.get('sort_by', 'date_desc'),
+                    limit=100
+                )
+            else:
+                # Load all papers
+                papers = self.paper_service.get_all_papers(limit=100)
+
             self.paper_feed.set_papers(papers)
 
             # Update status
             count = len(papers)
-            self._update_statusbar(f"{count} papers loaded")
+            if filters and any(filters.values()):
+                self._update_statusbar(f"{count} papers found")
+            else:
+                self._update_statusbar(f"{count} papers loaded")
 
         except Exception as e:
             logger.error(f"Failed to load papers: {e}")
@@ -277,9 +313,14 @@ class MainWindow(QMainWindow):
                 f"Failed to load papers:\n\n{str(e)}"
             )
 
+    def _on_filters_changed(self, filters: dict):
+        """Handle filter changes."""
+        self._load_papers(filters)
+
     def _refresh_papers(self):
-        """Refresh paper list."""
-        self._load_papers()
+        """Refresh paper list with current filters."""
+        filters = self.filter_panel.get_filters()
+        self._load_papers(filters)
         self._update_statusbar("Papers refreshed", 2000)
 
     def _show_preferences(self):
@@ -298,9 +339,9 @@ class MainWindow(QMainWindow):
             "About myArXiv",
             "<h3>myArXiv</h3>"
             "<p>arXiv Paper Management Application</p>"
-            "<p>Version 0.2.0 - Phase 2 Complete</p>"
+            "<p>Version 0.5.0</p>"
             "<p>A desktop application for managing arXiv papers with "
-            "ratings, notes, and PDF organization.</p>"
+            "ratings, notes, PDF organization, and powerful search/filtering.</p>"
         )
 
     def _on_view_pdf(self, paper_id: int):

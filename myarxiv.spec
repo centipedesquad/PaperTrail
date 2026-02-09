@@ -47,6 +47,7 @@ a = Analysis(
         'ui.widgets.paper_feed_widget',
         'ui.widgets.rating_widget',
         'ui.widgets.note_editor_widget',
+        'ui.widgets.filter_panel_widget',
         'ui.dialogs',
         'ui.dialogs.fetch_papers_dialog',
         'ui.dialogs.pdf_action_dialog',
@@ -112,12 +113,12 @@ app = BUNDLE(
     name='myArXiv.app',
     icon=None,  # Add icon later
     bundle_identifier='com.myarxiv.app',
-    version='0.2.0',
+    version='0.5.0',
     info_plist={
         'CFBundleName': 'myArXiv',
         'CFBundleDisplayName': 'myArXiv',
-        'CFBundleVersion': '0.2.0',
-        'CFBundleShortVersionString': '0.2.0',
+        'CFBundleVersion': '0.5.0',
+        'CFBundleShortVersionString': '0.5.0',
         'NSHighResolutionCapable': True,
         'LSMinimumSystemVersion': '10.13.0',
         'NSPrincipalClass': 'NSApplication',
