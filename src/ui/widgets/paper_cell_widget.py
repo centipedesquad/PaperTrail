@@ -13,6 +13,7 @@ from PySide6.QtGui import QFont, QCursor
 from models import Paper
 from ui.widgets.rating_widget import RatingWidget
 from ui.widgets.note_editor_widget import NoteEditorWidget
+from ui.theme import get_theme_manager
 
 logger = logging.getLogger(__name__)
 
@@ -48,19 +49,13 @@ class PaperCellWidget(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
+        # Get theme manager
+        theme = get_theme_manager()
+
         # Container frame with border
         self.container = QFrame()
         self.container.setFrameShape(QFrame.Box)
-        self.container.setStyleSheet("""
-            QFrame {
-                border: 1px solid #ddd;
-                border-radius: 5px;
-                background-color: white;
-            }
-            QFrame:hover {
-                border-color: #4a90e2;
-            }
-        """)
+        self.container.setStyleSheet(theme.get_widget_style('paper_cell'))
         container_layout = QVBoxLayout(self.container)
         container_layout.setContentsMargins(15, 10, 15, 10)
         container_layout.setSpacing(10)
@@ -84,7 +79,7 @@ class PaperCellWidget(QWidget):
         title_font.setBold(True)
         title_label.setFont(title_font)
         title_label.setWordWrap(True)
-        title_label.setStyleSheet("color: #2c3e50;")
+        title_label.setStyleSheet(f"color: {theme.get_color('text_primary')};")
         header_layout.addWidget(title_label, 1)
 
         container_layout.addWidget(header_widget)
@@ -101,7 +96,7 @@ class PaperCellWidget(QWidget):
             authors_text = authors_text[:150] + "..."
         authors_label = QLabel(f"<b>Authors:</b> {authors_text}")
         authors_label.setWordWrap(True)
-        authors_label.setStyleSheet("color: #555;")
+        authors_label.setStyleSheet(f"color: {theme.get_color('text_secondary')};")
         content_layout.addWidget(authors_label)
 
         # Metadata (arXiv ID, categories, date)
@@ -111,7 +106,7 @@ class PaperCellWidget(QWidget):
         meta_text += f"<b>Date:</b> {self.paper.publication_date}"
         meta_label = QLabel(meta_text)
         meta_label.setWordWrap(True)
-        meta_label.setStyleSheet("color: #666; font-size: 10pt;")
+        meta_label.setStyleSheet(f"color: {theme.get_color('text_secondary')}; font-size: 10pt;")
         content_layout.addWidget(meta_label)
 
         # Abstract (truncated)
@@ -120,7 +115,7 @@ class PaperCellWidget(QWidget):
             abstract_text = abstract_text[:500] + "..."
         abstract_label = QLabel(f"<b>Abstract:</b> {abstract_text}")
         abstract_label.setWordWrap(True)
-        abstract_label.setStyleSheet("color: #444; font-size: 10pt;")
+        abstract_label.setStyleSheet(f"color: {theme.get_color('text_primary')}; font-size: 10pt;")
         content_layout.addWidget(abstract_label)
 
         # Rating indicators (if rated)
@@ -133,7 +128,7 @@ class PaperCellWidget(QWidget):
             if self.paper.ratings.technicality:
                 rating_text += f"Technicality: {self.paper.ratings.technicality}"
             rating_label = QLabel(rating_text)
-            rating_label.setStyleSheet("color: #27ae60; font-size: 10pt;")
+            rating_label.setStyleSheet(f"color: {theme.get_color('success')}; font-size: 10pt;")
             content_layout.addWidget(rating_label)
 
         # Action buttons
@@ -142,50 +137,17 @@ class PaperCellWidget(QWidget):
 
         view_pdf_btn = QPushButton("View PDF")
         view_pdf_btn.clicked.connect(lambda: self.view_pdf_clicked.emit(self.paper.id))
-        view_pdf_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4a90e2;
-                color: white;
-                border: none;
-                padding: 5px 15px;
-                border-radius: 3px;
-            }
-            QPushButton:hover {
-                background-color: #357abd;
-            }
-        """)
+        view_pdf_btn.setStyleSheet(theme.get_widget_style('button_primary'))
         buttons_layout.addWidget(view_pdf_btn)
 
         self.notes_btn = QPushButton("✏️ Add/Edit Notes")
         self.notes_btn.clicked.connect(self._toggle_notes)
-        self.notes_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #95a5a6;
-                color: white;
-                border: none;
-                padding: 5px 15px;
-                border-radius: 3px;
-            }
-            QPushButton:hover {
-                background-color: #7f8c8d;
-            }
-        """)
+        self.notes_btn.setStyleSheet(theme.get_widget_style('button_secondary'))
         buttons_layout.addWidget(self.notes_btn)
 
         self.rating_btn = QPushButton("⭐ Rate Paper")
         self.rating_btn.clicked.connect(self._toggle_rating)
-        self.rating_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #27ae60;
-                color: white;
-                border: none;
-                padding: 5px 15px;
-                border-radius: 3px;
-            }
-            QPushButton:hover {
-                background-color: #229954;
-            }
-        """)
+        self.rating_btn.setStyleSheet(theme.get_widget_style('button_success'))
         buttons_layout.addWidget(self.rating_btn)
 
         buttons_layout.addStretch()

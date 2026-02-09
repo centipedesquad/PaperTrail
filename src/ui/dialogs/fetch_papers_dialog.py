@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal
 from typing import List
+from ui.theme import get_theme_manager
 
 logger = logging.getLogger(__name__)
 
@@ -140,8 +141,9 @@ class FetchPapersDialog(QDialog):
         layout.addWidget(self.progress_bar)
 
         # Status label
+        theme = get_theme_manager()
         self.status_label = QLabel("")
-        self.status_label.setStyleSheet("color: #666; font-style: italic;")
+        self.status_label.setStyleSheet(f"color: {theme.get_color('text_secondary')}; font-style: italic;")
         layout.addWidget(self.status_label)
 
         # Buttons
@@ -150,22 +152,7 @@ class FetchPapersDialog(QDialog):
 
         self.fetch_button = QPushButton("Fetch Papers")
         self.fetch_button.clicked.connect(self._on_fetch_clicked)
-        self.fetch_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4a90e2;
-                color: white;
-                padding: 8px 20px;
-                border: none;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #357abd;
-            }
-            QPushButton:disabled {
-                background-color: #ccc;
-            }
-        """)
+        self.fetch_button.setStyleSheet(theme.get_widget_style('button_primary'))
         buttons_layout.addWidget(self.fetch_button)
 
         cancel_button = QPushButton("Cancel")

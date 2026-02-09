@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QTextEdit
 )
 from PySide6.QtCore import Qt, Signal, QTimer
+from ui.theme import get_theme_manager
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +39,12 @@ class NoteEditorWidget(QWidget):
         layout.setContentsMargins(0, 5, 0, 5)
         layout.setSpacing(5)
 
+        # Get theme manager
+        theme = get_theme_manager()
+
         # Title
         title_label = QLabel("Notes:")
-        title_label.setStyleSheet("font-weight: bold; color: #2c3e50;")
+        title_label.setStyleSheet(f"font-weight: bold; color: {theme.get_color('text_primary')};")
         layout.addWidget(title_label)
 
         # Text editor
@@ -50,25 +54,26 @@ class NoteEditorWidget(QWidget):
         self.text_edit.setMaximumHeight(300)
         self.text_edit.textChanged.connect(self._on_text_changed)
 
-        self.text_edit.setStyleSheet("""
-            QTextEdit {
-                border: 1px solid #ccc;
-                border-radius: 3px;
+        self.text_edit.setStyleSheet(f"""
+            QTextEdit {{
+                border: 1px solid {theme.get_color('border')};
+                border-radius: 4px;
                 padding: 8px;
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
                 font-size: 11pt;
-                background-color: white;
-            }
-            QTextEdit:focus {
-                border-color: #4a90e2;
-            }
+                background-color: {theme.get_color('surface')};
+                color: {theme.get_color('text_primary')};
+            }}
+            QTextEdit:focus {{
+                border-color: {theme.get_color('primary')};
+            }}
         """)
 
         layout.addWidget(self.text_edit)
 
         # Auto-save indicator
         self.status_label = QLabel("")
-        self.status_label.setStyleSheet("color: #999; font-size: 9pt; font-style: italic;")
+        self.status_label.setStyleSheet(f"color: {theme.get_color('text_tertiary')}; font-size: 9pt; font-style: italic;")
         layout.addWidget(self.status_label)
 
     def _on_text_changed(self):

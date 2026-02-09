@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
+from ui.theme import get_theme_manager
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +48,10 @@ class PDFActionDialog(QDialog):
         layout.addWidget(title_label)
 
         # Paper info
+        theme = get_theme_manager()
         paper_label = QLabel(f"Paper: {paper_title}")
         paper_label.setWordWrap(True)
-        paper_label.setStyleSheet("color: #666; margin-bottom: 10px;")
+        paper_label.setStyleSheet(f"color: {theme.get_color('text_secondary')}; margin-bottom: 10px;")
         layout.addWidget(paper_label)
 
         # Explanation
@@ -81,7 +83,7 @@ class PDFActionDialog(QDialog):
             "• Opens faster on subsequent views\n"
             "• Recommended for papers you'll reference often"
         )
-        download_desc.setStyleSheet("color: #555; margin-left: 20px;")
+        download_desc.setStyleSheet(f"color: {theme.get_color('text_secondary')}; margin-left: 20px;")
         download_layout.addWidget(download_desc)
 
         download_widget = QVBoxLayout()
@@ -108,7 +110,7 @@ class PDFActionDialog(QDialog):
             "• Saves disk space\n"
             "• Good for quick previews"
         )
-        stream_desc.setStyleSheet("color: #555; margin-left: 20px;")
+        stream_desc.setStyleSheet(f"color: {theme.get_color('text_secondary')}; margin-left: 20px;")
         stream_layout.addWidget(stream_desc)
 
         stream_widget = QVBoxLayout()
@@ -120,7 +122,7 @@ class PDFActionDialog(QDialog):
 
         # Remember choice checkbox
         self.remember_checkbox = QCheckBox("Remember my choice and don't ask again")
-        self.remember_checkbox.setStyleSheet("font-style: italic; color: #666;")
+        self.remember_checkbox.setStyleSheet(f"font-style: italic; color: {theme.get_color('text_secondary')};")
         layout.addWidget(self.remember_checkbox)
 
         layout.addSpacing(10)
@@ -132,19 +134,7 @@ class PDFActionDialog(QDialog):
         proceed_button = QPushButton("Proceed")
         proceed_button.clicked.connect(self._on_proceed)
         proceed_button.setDefault(True)
-        proceed_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4a90e2;
-                color: white;
-                padding: 8px 20px;
-                border: none;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #357abd;
-            }
-        """)
+        proceed_button.setStyleSheet(theme.get_widget_style('button_primary'))
         buttons_layout.addWidget(proceed_button)
 
         cancel_button = QPushButton("Cancel")

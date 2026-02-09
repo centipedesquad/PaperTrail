@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QScrollArea
 )
 from PySide6.QtCore import Qt, Signal, QDate
+from ui.theme import get_theme_manager
 
 logger = logging.getLogger(__name__)
 
@@ -176,22 +177,23 @@ class FilterPanelWidget(QWidget):
         scroll_area.setWidget(container)
         main_layout.addWidget(scroll_area)
 
-        # Style
-        self.setStyleSheet("""
-            QGroupBox {
+        # Apply theme styling
+        theme = get_theme_manager()
+        self.setStyleSheet(f"""
+            QGroupBox {{
                 font-weight: bold;
-                border: 1px solid #ddd;
-                border-radius: 5px;
+                border: 1px solid {theme.get_color('border')};
+                border-radius: 6px;
                 margin-top: 10px;
                 padding-top: 10px;
-            }
-            QGroupBox::title {
+            }}
+            QGroupBox::title {{
                 subcontrol-origin: margin;
                 subcontrol-position: top left;
-                padding: 0 5px;
-                color: #2c3e50;
-            }
-        """)
+                padding: 0 8px;
+                color: {theme.get_color('text_primary')};
+            }}
+        """ + theme.get_widget_style('filter_panel'))
 
     def set_categories(self, categories: List[tuple]):
         """
