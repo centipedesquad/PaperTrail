@@ -21,7 +21,9 @@ class ArxivClient:
 
     def fetch_new_papers(self, categories: List[str], max_results: int = 50) -> List[dict]:
         """
-        Fetch new papers submitted today from specified categories.
+        Fetch recent papers from specified categories.
+        Note: arXiv doesn't provide a way to get only "today's" papers via API,
+        so this fetches the most recent papers sorted by submission date.
 
         Args:
             categories: List of arXiv category codes (e.g., ['hep-th', 'gr-qc'])
@@ -31,40 +33,33 @@ class ArxivClient:
             List of paper dictionaries
         """
         papers = []
-        today = datetime.now().date()
 
         for category in categories:
             try:
                 logger.info(f"Fetching new papers from category: {category}")
 
                 # Query for papers in this category, sorted by submission date
-                # Fetch more than needed to ensure we get all of today's papers
+                # The arXiv API returns most recently submitted/updated papers first
                 search = arxiv.Search(
                     query=f"cat:{category}",
-                    max_results=max_results * 3,  # Fetch 3x to ensure we get all of today's papers
+                    max_results=max_results,
                     sort_by=arxiv.SortCriterion.SubmittedDate,
                     sort_order=arxiv.SortOrder.Descending
                 )
 
                 category_papers = []
                 for result in search.results():
-                    # Only include papers published today
-                    paper_date = result.published.date()
-                    if paper_date == today:
-                        paper = self._convert_result_to_dict(result)
-                        category_papers.append(paper)
-                    elif paper_date < today:
-                        # We've gone past today's papers, stop searching
-                        break
+                    paper = self._convert_result_to_dict(result)
+                    category_papers.append(paper)
 
-                logger.info(f"Found {len(category_papers)} papers from {category} published today")
+                logger.info(f"Fetched {len(category_papers)} papers from {category}")
                 papers.extend(category_papers)
 
             except Exception as e:
                 logger.error(f"Failed to fetch papers from {category}: {e}")
                 # Continue with other categories
 
-        logger.info(f"Fetched {len(papers)} papers total from today")
+        logger.info(f"Fetched {len(papers)} papers total")
         return papers
 
     def fetch_recent_papers(
