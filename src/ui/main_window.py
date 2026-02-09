@@ -357,12 +357,12 @@ class MainWindow(QMainWindow):
 
     def _show_preferences(self):
         """Show preferences dialog."""
-        # TODO: Implement in Phase 3
-        QMessageBox.information(
-            self,
-            "Preferences",
-            "Preferences dialog will be implemented in Phase 3"
-        )
+        from ui.dialogs.preferences_dialog import PreferencesDialog
+
+        dialog = PreferencesDialog(self.config_service, self)
+        if dialog.exec() == QDialog.Accepted:
+            # Settings were saved - might need to refresh UI
+            self._update_statusbar("Preferences saved", 2000)
 
     def _show_about(self):
         """Show about dialog."""
