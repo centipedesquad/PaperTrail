@@ -406,7 +406,8 @@ class MainWindow(QMainWindow):
             if download_preference == "ask":
                 # Show dialog
                 dialog = PDFActionDialog(paper.title, self)
-                if dialog.exec() != QDialog.Accepted:
+                result = dialog.exec()
+                if result != QDialog.Accepted:
                     return
 
                 action = dialog.get_action()
