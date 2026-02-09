@@ -11,6 +11,8 @@ A desktop application for efficiently managing and organizing arXiv papers for r
 - **PDF Management**: On-demand download with customizable naming patterns
 - **Reader Integration**: Opens PDFs in Skim (macOS) or configurable Linux readers
 - **Full-Text Search**: Fast FTS5-powered search across titles, abstracts, authors, and notes
+- **Advanced Filtering**: Filter by categories, date ranges, rating status, and PDF availability
+- **Flexible Sorting**: Sort papers by date (newest/oldest first) or title (A-Z/Z-A)
 - **Cross-Platform**: Works on macOS and Linux
 
 ## Installation
