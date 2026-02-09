@@ -36,7 +36,7 @@ class PaperCellWidget(QWidget):
         """
         super().__init__(parent)
         self.paper = paper
-        self.is_expanded = True  # Start expanded
+        self.is_expanded = False  # Start collapsed for better scanning
         self.rating_visible = False
         self.notes_visible = False
 
@@ -46,7 +46,7 @@ class PaperCellWidget(QWidget):
         """Setup UI components."""
         # Main layout
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setContentsMargins(0, 0, 0, 8)  # Bottom margin for spacing between cells
         main_layout.setSpacing(0)
 
         # Get theme manager
@@ -57,8 +57,8 @@ class PaperCellWidget(QWidget):
         self.container.setFrameShape(QFrame.Box)
         self.container.setStyleSheet(theme.get_widget_style('paper_cell'))
         container_layout = QVBoxLayout(self.container)
-        container_layout.setContentsMargins(15, 10, 15, 10)
-        container_layout.setSpacing(10)
+        container_layout.setContentsMargins(20, 15, 20, 15)  # More breathing room
+        container_layout.setSpacing(12)  # More space between elements
 
         # Header (always visible) - clickable to toggle
         header_widget = QWidget()
@@ -68,18 +68,21 @@ class PaperCellWidget(QWidget):
         header_layout.setContentsMargins(0, 0, 0, 0)
 
         # Expand/collapse arrow
-        self.arrow_label = QLabel("▼")
-        self.arrow_label.setFixedWidth(20)
+        self.arrow_label = QLabel("▶")  # Start collapsed
+        self.arrow_label.setFixedWidth(25)
+        arrow_font = QFont()
+        arrow_font.setPointSize(11)
+        self.arrow_label.setFont(arrow_font)
         header_layout.addWidget(self.arrow_label)
 
         # Title
         title_label = QLabel(self.paper.title)
         title_font = QFont()
-        title_font.setPointSize(12)
+        title_font.setPointSize(14)  # Larger, more readable
         title_font.setBold(True)
         title_label.setFont(title_font)
         title_label.setWordWrap(True)
-        title_label.setStyleSheet(f"color: {theme.get_color('text_primary')};")
+        title_label.setStyleSheet(f"color: {theme.get_color('text_primary')}; line-height: 1.4;")
         header_layout.addWidget(title_label, 1)
 
         container_layout.addWidget(header_widget)
@@ -87,15 +90,18 @@ class PaperCellWidget(QWidget):
         # Content (expandable)
         self.content_widget = QWidget()
         content_layout = QVBoxLayout(self.content_widget)
-        content_layout.setContentsMargins(20, 0, 0, 0)
-        content_layout.setSpacing(8)
+        content_layout.setContentsMargins(25, 10, 0, 0)  # Indent and add top spacing
+        content_layout.setSpacing(12)  # More breathing room
 
         # Authors
         authors_text = ", ".join([a.name for a in self.paper.authors])
-        if len(authors_text) > 150:
-            authors_text = authors_text[:150] + "..."
+        if len(authors_text) > 200:
+            authors_text = authors_text[:200] + "..."
         authors_label = QLabel(f"<b>Authors:</b> {authors_text}")
         authors_label.setWordWrap(True)
+        authors_font = QFont()
+        authors_font.setPointSize(11)
+        authors_label.setFont(authors_font)
         authors_label.setStyleSheet(f"color: {theme.get_color('text_secondary')};")
         content_layout.addWidget(authors_label)
 
@@ -106,16 +112,25 @@ class PaperCellWidget(QWidget):
         meta_text += f"<b>Date:</b> {self.paper.publication_date}"
         meta_label = QLabel(meta_text)
         meta_label.setWordWrap(True)
-        meta_label.setStyleSheet(f"color: {theme.get_color('text_secondary')}; font-size: 10pt;")
+        meta_font = QFont()
+        meta_font.setPointSize(10)
+        meta_label.setFont(meta_font)
+        meta_label.setStyleSheet(f"color: {theme.get_color('text_secondary')};")
         content_layout.addWidget(meta_label)
 
-        # Abstract (truncated)
+        # Abstract (truncated with better length)
         abstract_text = self.paper.abstract
-        if len(abstract_text) > 500:
-            abstract_text = abstract_text[:500] + "..."
+        if len(abstract_text) > 600:
+            abstract_text = abstract_text[:600] + "..."
         abstract_label = QLabel(f"<b>Abstract:</b> {abstract_text}")
         abstract_label.setWordWrap(True)
-        abstract_label.setStyleSheet(f"color: {theme.get_color('text_primary')}; font-size: 10pt;")
+        abstract_font = QFont()
+        abstract_font.setPointSize(11)
+        abstract_label.setFont(abstract_font)
+        abstract_label.setStyleSheet(
+            f"color: {theme.get_color('text_primary')}; "
+            f"line-height: 1.5; padding-top: 4px;"
+        )
         content_layout.addWidget(abstract_label)
 
         # Rating indicators (if rated)
@@ -128,24 +143,34 @@ class PaperCellWidget(QWidget):
             if self.paper.ratings.technicality:
                 rating_text += f"Technicality: {self.paper.ratings.technicality}"
             rating_label = QLabel(rating_text)
-            rating_label.setStyleSheet(f"color: {theme.get_color('success')}; font-size: 10pt;")
+            rating_font = QFont()
+            rating_font.setPointSize(11)
+            rating_label.setFont(rating_font)
+            rating_label.setStyleSheet(f"color: {theme.get_color('success')};")
             content_layout.addWidget(rating_label)
 
         # Action buttons
         buttons_layout = QHBoxLayout()
-        buttons_layout.setSpacing(10)
+        buttons_layout.setSpacing(12)
+        buttons_layout.setContentsMargins(0, 8, 0, 0)  # Add top spacing
 
-        view_pdf_btn = QPushButton("View PDF")
+        view_pdf_btn = QPushButton("📄 View PDF")
+        view_pdf_btn.setMinimumHeight(32)
+        view_pdf_btn.setMinimumWidth(120)
         view_pdf_btn.clicked.connect(lambda: self.view_pdf_clicked.emit(self.paper.id))
         view_pdf_btn.setStyleSheet(theme.get_widget_style('button_primary'))
         buttons_layout.addWidget(view_pdf_btn)
 
-        self.notes_btn = QPushButton("✏️ Add/Edit Notes")
+        self.notes_btn = QPushButton("✏️ Notes")
+        self.notes_btn.setMinimumHeight(32)
+        self.notes_btn.setMinimumWidth(100)
         self.notes_btn.clicked.connect(self._toggle_notes)
         self.notes_btn.setStyleSheet(theme.get_widget_style('button_secondary'))
         buttons_layout.addWidget(self.notes_btn)
 
-        self.rating_btn = QPushButton("⭐ Rate Paper")
+        self.rating_btn = QPushButton("⭐ Rate")
+        self.rating_btn.setMinimumHeight(32)
+        self.rating_btn.setMinimumWidth(100)
         self.rating_btn.clicked.connect(self._toggle_rating)
         self.rating_btn.setStyleSheet(theme.get_widget_style('button_success'))
         buttons_layout.addWidget(self.rating_btn)

@@ -41,7 +41,8 @@ class MainWindow(QMainWindow):
         self.pdf_service = pdf_service
 
         self.setWindowTitle("myArXiv - arXiv Paper Manager")
-        self.setMinimumSize(1200, 800)
+        self.setMinimumSize(1000, 700)
+        self.resize(1400, 900)  # Default size
 
         # Workers for background operations
         self.fetch_worker = None
@@ -76,8 +77,8 @@ class MainWindow(QMainWindow):
 
         # Filter panel (left side)
         self.filter_panel = FilterPanelWidget()
-        self.filter_panel.setMinimumWidth(200)
-        self.filter_panel.setMaximumWidth(350)
+        self.filter_panel.setMinimumWidth(250)
+        self.filter_panel.setMaximumWidth(400)
         self.filter_panel.filters_changed.connect(self._on_filters_changed)
         splitter.addWidget(self.filter_panel)
 
@@ -88,9 +89,10 @@ class MainWindow(QMainWindow):
         self.paper_feed.note_changed.connect(self._on_note_changed)
         splitter.addWidget(self.paper_feed)
 
-        # Set splitter proportions
+        # Set splitter proportions (filter panel: 280px, rest: paper feed)
         splitter.setStretchFactor(0, 0)  # Filter panel doesn't stretch
         splitter.setStretchFactor(1, 1)  # Paper feed stretches
+        splitter.setSizes([280, 1120])  # Initial sizes
 
         main_layout.addWidget(splitter)
 

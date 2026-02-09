@@ -49,8 +49,8 @@ class PaperFeedWidget(QWidget):
         # Container widget for paper cells
         self.container_widget = QWidget()
         self.container_layout = QVBoxLayout(self.container_widget)
-        self.container_layout.setContentsMargins(10, 10, 10, 10)
-        self.container_layout.setSpacing(10)
+        self.container_layout.setContentsMargins(20, 20, 20, 20)  # More padding around content
+        self.container_layout.setSpacing(0)  # Spacing handled by cells themselves
         self.container_layout.setAlignment(Qt.AlignTop)
 
         # Empty state label

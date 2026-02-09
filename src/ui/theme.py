@@ -449,7 +449,8 @@ class ThemeManager:
                     background-color: {self.get_color('surface')};
                 }}
                 QFrame:hover {{
-                    border-color: {self.get_color('primary')};
+                    border-color: {self.get_color('border_hover')};
+                    background-color: {self.get_color('surface_hover')};
                 }}
             """,
             'button_primary': f"""
@@ -457,9 +458,10 @@ class ThemeManager:
                     background-color: {self.get_color('primary')};
                     color: white;
                     border: none;
-                    padding: 8px 16px;
+                    padding: 10px 20px;
                     border-radius: 6px;
                     font-weight: 500;
+                    font-size: 11pt;
                 }}
                 QPushButton:hover {{
                     background-color: {self.get_color('primary_hover')};
@@ -473,9 +475,10 @@ class ThemeManager:
                     background-color: {self.get_color('success')};
                     color: white;
                     border: none;
-                    padding: 8px 16px;
+                    padding: 10px 20px;
                     border-radius: 6px;
                     font-weight: 500;
+                    font-size: 11pt;
                 }}
                 QPushButton:hover {{
                     background-color: {self.get_color('success_hover')};
@@ -489,9 +492,10 @@ class ThemeManager:
                     background-color: {self.get_color('secondary')};
                     color: white;
                     border: none;
-                    padding: 8px 16px;
+                    padding: 10px 20px;
                     border-radius: 6px;
                     font-weight: 500;
+                    font-size: 11pt;
                 }}
                 QPushButton:hover {{
                     background-color: {self.get_color('secondary_hover')};
