@@ -20,8 +20,8 @@ class PaperFeedWidget(QWidget):
 
     # Signals
     view_pdf_requested = Signal(int)  # paper_id
-    add_note_requested = Signal(int)  # paper_id
-    rate_paper_requested = Signal(int)  # paper_id
+    rating_changed = Signal(int, str, str, str)  # paper_id, importance, comprehension, technicality
+    note_changed = Signal(int, str)  # paper_id, note_text
 
     def __init__(self, parent=None):
         """
@@ -90,8 +90,8 @@ class PaperFeedWidget(QWidget):
 
             # Connect signals
             cell.view_pdf_clicked.connect(self.view_pdf_requested.emit)
-            cell.add_note_clicked.connect(self.add_note_requested.emit)
-            cell.rate_paper_clicked.connect(self.rate_paper_requested.emit)
+            cell.rating_changed.connect(self.rating_changed.emit)
+            cell.note_changed.connect(self.note_changed.emit)
 
             self.container_layout.addWidget(cell)
             self.paper_cells.append(cell)
@@ -111,8 +111,8 @@ class PaperFeedWidget(QWidget):
 
         # Connect signals
         cell.view_pdf_clicked.connect(self.view_pdf_requested.emit)
-        cell.add_note_clicked.connect(self.add_note_requested.emit)
-        cell.rate_paper_clicked.connect(self.rate_paper_requested.emit)
+        cell.rating_changed.connect(self.rating_changed.emit)
+        cell.note_changed.connect(self.note_changed.emit)
 
         # Insert at top (most recent first)
         self.container_layout.insertWidget(0, cell)

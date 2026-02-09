@@ -11,6 +11,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QFont, QCursor
 from models import Paper
+from ui.widgets.rating_widget import RatingWidget
+from ui.widgets.note_editor_widget import NoteEditorWidget
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +22,8 @@ class PaperCellWidget(QWidget):
 
     # Signals
     view_pdf_clicked = Signal(int)  # paper_id
-    add_note_clicked = Signal(int)  # paper_id
-    rate_paper_clicked = Signal(int)  # paper_id
+    rating_changed = Signal(int, str, str, str)  # paper_id, importance, comprehension, technicality
+    note_changed = Signal(int, str)  # paper_id, note_text
 
     def __init__(self, paper: Paper, parent=None):
         """
@@ -34,6 +36,8 @@ class PaperCellWidget(QWidget):
         super().__init__(parent)
         self.paper = paper
         self.is_expanded = True  # Start expanded
+        self.rating_visible = False
+        self.notes_visible = False
 
         self._setup_ui()
 
@@ -152,9 +156,9 @@ class PaperCellWidget(QWidget):
         """)
         buttons_layout.addWidget(view_pdf_btn)
 
-        add_note_btn = QPushButton("Add/Edit Notes")
-        add_note_btn.clicked.connect(lambda: self.add_note_clicked.emit(self.paper.id))
-        add_note_btn.setStyleSheet("""
+        self.notes_btn = QPushButton("✏️ Add/Edit Notes")
+        self.notes_btn.clicked.connect(self._toggle_notes)
+        self.notes_btn.setStyleSheet("""
             QPushButton {
                 background-color: #95a5a6;
                 color: white;
@@ -166,11 +170,11 @@ class PaperCellWidget(QWidget):
                 background-color: #7f8c8d;
             }
         """)
-        buttons_layout.addWidget(add_note_btn)
+        buttons_layout.addWidget(self.notes_btn)
 
-        rate_paper_btn = QPushButton("Rate Paper")
-        rate_paper_btn.clicked.connect(lambda: self.rate_paper_clicked.emit(self.paper.id))
-        rate_paper_btn.setStyleSheet("""
+        self.rating_btn = QPushButton("⭐ Rate Paper")
+        self.rating_btn.clicked.connect(self._toggle_rating)
+        self.rating_btn.setStyleSheet("""
             QPushButton {
                 background-color: #27ae60;
                 color: white;
@@ -182,10 +186,32 @@ class PaperCellWidget(QWidget):
                 background-color: #229954;
             }
         """)
-        buttons_layout.addWidget(rate_paper_btn)
+        buttons_layout.addWidget(self.rating_btn)
 
         buttons_layout.addStretch()
         content_layout.addLayout(buttons_layout)
+
+        # Inline rating widget (hidden by default)
+        self.rating_widget = RatingWidget()
+        self.rating_widget.setVisible(False)
+        self.rating_widget.rating_changed.connect(self._on_rating_changed)
+        # Load existing ratings
+        if self.paper.ratings:
+            self.rating_widget.set_ratings(
+                self.paper.ratings.importance,
+                self.paper.ratings.comprehension,
+                self.paper.ratings.technicality
+            )
+        content_layout.addWidget(self.rating_widget)
+
+        # Inline note editor (hidden by default)
+        self.note_editor = NoteEditorWidget()
+        self.note_editor.setVisible(False)
+        self.note_editor.note_changed.connect(self._on_note_changed)
+        # Load existing note
+        if self.paper.notes and self.paper.notes.note_text:
+            self.note_editor.set_note(self.paper.notes.note_text)
+        content_layout.addWidget(self.note_editor)
 
         container_layout.addWidget(self.content_widget)
 
@@ -209,3 +235,33 @@ class PaperCellWidget(QWidget):
         """Set expanded state."""
         if self.is_expanded != expanded:
             self.toggle_expanded()
+
+    def _toggle_rating(self):
+        """Toggle rating widget visibility."""
+        self.rating_visible = not self.rating_visible
+        self.rating_widget.setVisible(self.rating_visible)
+
+        # Update button text
+        if self.rating_visible:
+            self.rating_btn.setText("⭐ Hide Rating")
+        else:
+            self.rating_btn.setText("⭐ Rate Paper")
+
+    def _toggle_notes(self):
+        """Toggle notes editor visibility."""
+        self.notes_visible = not self.notes_visible
+        self.note_editor.setVisible(self.notes_visible)
+
+        # Update button text
+        if self.notes_visible:
+            self.notes_btn.setText("✏️ Hide Notes")
+        else:
+            self.notes_btn.setText("✏️ Add/Edit Notes")
+
+    def _on_rating_changed(self, importance: str, comprehension: str, technicality: str):
+        """Handle rating change."""
+        self.rating_changed.emit(self.paper.id, importance, comprehension, technicality)
+
+    def _on_note_changed(self, note_text: str):
+        """Handle note change."""
+        self.note_changed.emit(self.paper.id, note_text)

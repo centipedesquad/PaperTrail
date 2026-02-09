@@ -45,6 +45,8 @@ a = Analysis(
         'ui.widgets',
         'ui.widgets.paper_cell_widget',
         'ui.widgets.paper_feed_widget',
+        'ui.widgets.rating_widget',
+        'ui.widgets.note_editor_widget',
         'ui.dialogs',
         'ui.dialogs.fetch_papers_dialog',
         'ui.dialogs.pdf_action_dialog',

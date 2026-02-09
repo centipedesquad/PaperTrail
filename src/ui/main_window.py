@@ -82,8 +82,8 @@ class MainWindow(QMainWindow):
         # Paper feed (right side)
         self.paper_feed = PaperFeedWidget()
         self.paper_feed.view_pdf_requested.connect(self._on_view_pdf)
-        self.paper_feed.add_note_requested.connect(self._on_add_note)
-        self.paper_feed.rate_paper_requested.connect(self._on_rate_paper)
+        self.paper_feed.rating_changed.connect(self._on_rating_changed)
+        self.paper_feed.note_changed.connect(self._on_note_changed)
         splitter.addWidget(self.paper_feed)
 
         # Set splitter proportions
@@ -352,23 +352,57 @@ class MainWindow(QMainWindow):
             logger.error(f"Error viewing PDF: {e}")
             QMessageBox.critical(self, "Error", f"Failed to view PDF:\n\n{str(e)}")
 
-    def _on_add_note(self, paper_id: int):
-        """Handle add note request."""
-        # TODO: Implement in Phase 4
-        QMessageBox.information(
-            self,
-            "Add Note",
-            f"Note editing for paper ID {paper_id} will be implemented in Phase 4"
-        )
+    def _on_rating_changed(self, paper_id: int, importance: str, comprehension: str, technicality: str):
+        """
+        Handle rating change.
 
-    def _on_rate_paper(self, paper_id: int):
-        """Handle rate paper request."""
-        # TODO: Implement in Phase 4
-        QMessageBox.information(
-            self,
-            "Rate Paper",
-            f"Rating for paper ID {paper_id} will be implemented in Phase 4"
-        )
+        Args:
+            paper_id: Paper ID
+            importance: Importance rating
+            comprehension: Comprehension rating
+            technicality: Technicality rating
+        """
+        try:
+            # Save rating
+            self.paper_service.save_rating(
+                paper_id,
+                importance=importance or None,
+                comprehension=comprehension or None,
+                technicality=technicality or None
+            )
+
+            logger.info(f"Saved rating for paper {paper_id}")
+            self._update_statusbar("Rating saved", 2000)
+
+        except Exception as e:
+            logger.error(f"Failed to save rating: {e}")
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to save rating:\n\n{str(e)}"
+            )
+
+    def _on_note_changed(self, paper_id: int, note_text: str):
+        """
+        Handle note change.
+
+        Args:
+            paper_id: Paper ID
+            note_text: Note content
+        """
+        try:
+            # Save note
+            if note_text:
+                self.paper_service.save_note(paper_id, note_text)
+                logger.info(f"Saved note for paper {paper_id}")
+            else:
+                # Empty note - could delete, but let's just save empty
+                self.paper_service.save_note(paper_id, "")
+
+        except Exception as e:
+            logger.error(f"Failed to save note: {e}")
+            # Don't show error dialog for auto-save failures
+            self._update_statusbar("Failed to save note", 3000)
 
     def _start_pdf_download(self, paper, action: str):
         """
