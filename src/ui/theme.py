@@ -213,9 +213,20 @@ class ThemeManager:
         """Generate global Qt stylesheet for current theme."""
         return f"""
         /* Global application styles */
-        QMainWindow, QDialog, QWidget {{
+        QMainWindow, QDialog {{
             background-color: {self.get_color('background')};
             color: {self.get_color('text_primary')};
+        }}
+
+        /* Default widget background - transparent for nested widgets */
+        QWidget {{
+            background-color: transparent;
+            color: {self.get_color('text_primary')};
+        }}
+
+        /* Override background for top-level widgets only */
+        QMainWindow > QWidget {{
+            background-color: {self.get_color('background')};
         }}
 
         /* Scroll bars */
@@ -450,7 +461,14 @@ class ThemeManager:
                 }}
                 QFrame:hover {{
                     border-color: {self.get_color('border_hover')};
-                    background-color: {self.get_color('surface_hover')};
+                }}
+                QFrame QWidget {{
+                    background-color: transparent;
+                    border: none;
+                }}
+                QFrame QLabel {{
+                    background-color: transparent;
+                    border: none;
                 }}
             """,
             'button_primary': f"""
@@ -458,10 +476,10 @@ class ThemeManager:
                     background-color: {self.get_color('primary')};
                     color: white;
                     border: none;
-                    padding: 10px 20px;
-                    border-radius: 6px;
+                    padding: 4px 12px;
+                    border-radius: 4px;
                     font-weight: 500;
-                    font-size: 11pt;
+                    font-size: 10pt;
                 }}
                 QPushButton:hover {{
                     background-color: {self.get_color('primary_hover')};
@@ -475,10 +493,10 @@ class ThemeManager:
                     background-color: {self.get_color('success')};
                     color: white;
                     border: none;
-                    padding: 10px 20px;
-                    border-radius: 6px;
+                    padding: 4px 12px;
+                    border-radius: 4px;
                     font-weight: 500;
-                    font-size: 11pt;
+                    font-size: 10pt;
                 }}
                 QPushButton:hover {{
                     background-color: {self.get_color('success_hover')};
@@ -492,10 +510,10 @@ class ThemeManager:
                     background-color: {self.get_color('secondary')};
                     color: white;
                     border: none;
-                    padding: 10px 20px;
-                    border-radius: 6px;
+                    padding: 4px 12px;
+                    border-radius: 4px;
                     font-weight: 500;
-                    font-size: 11pt;
+                    font-size: 10pt;
                 }}
                 QPushButton:hover {{
                     background-color: {self.get_color('secondary_hover')};

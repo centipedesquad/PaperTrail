@@ -173,3 +173,14 @@ class ConfigService:
     def set_theme(self, theme: str):
         """Set UI theme."""
         self.set('theme', theme)
+
+    def get_font_size(self) -> int:
+        """Get base font size."""
+        try:
+            return int(self.get('font_size', '11'))
+        except ValueError:
+            return 11
+
+    def set_font_size(self, size: int):
+        """Set base font size."""
+        self.set('font_size', str(size))

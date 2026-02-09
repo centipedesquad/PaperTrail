@@ -171,26 +171,26 @@ class PaperCellWidget(QWidget):
 
         # Action buttons
         buttons_layout = QHBoxLayout()
-        buttons_layout.setSpacing(12)
+        buttons_layout.setSpacing(8)
         buttons_layout.setContentsMargins(0, 8, 0, 0)  # Add top spacing
 
         view_pdf_btn = QPushButton("View PDF")
-        view_pdf_btn.setMinimumHeight(32)
-        view_pdf_btn.setMinimumWidth(110)
+        view_pdf_btn.setFixedHeight(28)
+        view_pdf_btn.setMinimumWidth(100)
         view_pdf_btn.clicked.connect(lambda: self.view_pdf_clicked.emit(self.paper.id))
         view_pdf_btn.setStyleSheet(theme.get_widget_style('button_primary'))
         buttons_layout.addWidget(view_pdf_btn)
 
         self.notes_btn = QPushButton("Notes")
-        self.notes_btn.setMinimumHeight(32)
-        self.notes_btn.setMinimumWidth(90)
+        self.notes_btn.setFixedHeight(28)
+        self.notes_btn.setMinimumWidth(80)
         self.notes_btn.clicked.connect(self._toggle_notes)
         self.notes_btn.setStyleSheet(theme.get_widget_style('button_secondary'))
         buttons_layout.addWidget(self.notes_btn)
 
         self.rating_btn = QPushButton("Rate Paper")
-        self.rating_btn.setMinimumHeight(32)
-        self.rating_btn.setMinimumWidth(110)
+        self.rating_btn.setFixedHeight(28)
+        self.rating_btn.setMinimumWidth(100)
         self.rating_btn.clicked.connect(self._toggle_rating)
         self.rating_btn.setStyleSheet(theme.get_widget_style('button_success'))
         buttons_layout.addWidget(self.rating_btn)
