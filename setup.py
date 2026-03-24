@@ -34,7 +34,7 @@ OPTIONS = {
         'PIL',
         'tkinter',
     ],
-    'iconfile': None,  # Will add icon later
+    'iconfile': 'src/assets/AppIcon.icns',
     'plist': {
         'CFBundleName': 'PaperTrail',
         'CFBundleDisplayName': 'PaperTrail',

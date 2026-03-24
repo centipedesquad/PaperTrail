@@ -19,7 +19,7 @@ echo ""
 
 # Build the application
 echo "2. Building application bundle with PyInstaller..."
-pyinstaller --clean --noconfirm PaperTrail.spec
+pyinstaller --clean --noconfirm src/PaperTrail.spec
 echo "   ✓ Built"
 echo ""
 

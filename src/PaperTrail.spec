@@ -81,6 +81,6 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='PaperTrail.app',
-    icon=None,
+    icon=os.path.join(src_dir, 'assets', 'AppIcon.icns'),
     bundle_identifier=None,
 )

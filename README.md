@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="src/assets/AppIcon.png" width="128" alt="PaperTrail icon">
+</p>
+
 # PaperTrail - arXiv Paper Management Application
 
 A desktop application for efficiently managing and organizing arXiv papers for research workflows.
@@ -214,6 +218,8 @@ PaperTrail/
 │   │       ├── fetch_papers_dialog.py
 │   │       ├── pdf_action_dialog.py
 │   │       └── preferences_dialog.py
+│   ├── assets/                    # App resources
+│   │   └── AppIcon.icns           # Application icon
 │   └── utils/                     # Utilities
 │       ├── platform_utils.py
 │       ├── async_utils.py
