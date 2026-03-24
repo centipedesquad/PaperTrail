@@ -1,5 +1,5 @@
 """
-Asynchronous utilities for myArXiv.
+Asynchronous utilities for PaperTrail.
 QThread workers for non-blocking operations.
 """
 

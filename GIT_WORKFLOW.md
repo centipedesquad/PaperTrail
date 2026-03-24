@@ -1,6 +1,6 @@
-# Git Workflow for myArXiv
+# Git Workflow for PaperTrail
 
-This document explains the git branching strategy and workflow for the myArXiv project.
+This document explains the git branching strategy and workflow for the PaperTrail project.
 
 ## Branch Structure
 
@@ -17,7 +17,7 @@ This document explains the git branching strategy and workflow for the myArXiv p
 
 **Does NOT contain**:
 - ❌ Build scripts (`build_app.sh`, `install.sh`)
-- ❌ Build configuration (`myarxiv.spec`, `setup.py`)
+- ❌ Build configuration (`papertrail.spec`, `setup.py`)
 - ❌ Build documentation (`BUILDING.md`, `DEPLOYMENT.md`)
 - ❌ Test files (`test_phase2.py`)
 - ❌ Internal planning documents (`IMPLEMENTATION.md`)
@@ -93,7 +93,7 @@ src/
 ```
 build_app.sh        - Build script
 install.sh          - Installation script
-myarxiv.spec        - PyInstaller configuration
+papertrail.spec        - PyInstaller configuration
 setup.py            - py2app configuration (unused)
 test_phase2.py      - Integration tests
 BUILDING.md         - Build instructions
@@ -120,7 +120,7 @@ __pycache__/        - Python cache
 ```bash
 # Clone the repository
 git clone <repo-url>
-cd myArXiv
+cd PaperTrail
 
 # Install dependencies
 uv venv
@@ -137,7 +137,7 @@ uv pip install -r requirements.txt
 ```bash
 # Clone and switch to dev
 git clone <repo-url>
-cd myArXiv
+cd PaperTrail
 git checkout dev
 
 # Install dependencies
@@ -192,7 +192,7 @@ uv pip install -r requirements.txt
    ```
 
 2. **Update version numbers**:
-   - `myarxiv.spec` (version)
+   - `papertrail.spec` (version)
    - `README.md` (if needed)
 
 3. **Commit version bump to dev**:

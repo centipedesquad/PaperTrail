@@ -1,10 +1,10 @@
 #!/bin/bash
-# Build script for myArXiv macOS application
+# Build script for PaperTrail macOS application
 
 set -e  # Exit on error
 
 echo "================================"
-echo "Building myArXiv.app"
+echo "Building PaperTrail.app"
 echo "================================"
 echo ""
 
@@ -19,21 +19,21 @@ echo ""
 
 # Build the application
 echo "2. Building application bundle with PyInstaller..."
-pyinstaller --clean --noconfirm myarxiv.spec
+pyinstaller --clean --noconfirm PaperTrail.spec
 echo "   ✓ Built"
 echo ""
 
 # Verify the build
-if [ -d "dist/myArXiv.app" ]; then
+if [ -d "dist/PaperTrail.app" ]; then
     echo "3. Build verification..."
-    echo "   ✓ Application bundle created: dist/myArXiv.app"
+    echo "   ✓ Application bundle created: dist/PaperTrail.app"
 
     # Get bundle size
-    SIZE=$(du -sh dist/myArXiv.app | cut -f1)
+    SIZE=$(du -sh dist/PaperTrail.app | cut -f1)
     echo "   ✓ Bundle size: $SIZE"
 
     # Check if executable exists
-    if [ -f "dist/myArXiv.app/Contents/MacOS/myArXiv" ]; then
+    if [ -f "dist/PaperTrail.app/Contents/MacOS/PaperTrail" ]; then
         echo "   ✓ Executable found"
     else
         echo "   ✗ Executable not found"
@@ -46,14 +46,14 @@ if [ -d "dist/myArXiv.app" ]; then
     echo "================================"
     echo ""
     echo "To install:"
-    echo "  cp -r dist/myArXiv.app /Applications/"
+    echo "  cp -r dist/PaperTrail.app /Applications/"
     echo ""
-    echo "Or drag dist/myArXiv.app to your Applications folder"
+    echo "Or drag dist/PaperTrail.app to your Applications folder"
     echo ""
     echo "To test before installing:"
-    echo "  open dist/myArXiv.app"
+    echo "  open dist/PaperTrail.app"
     echo ""
 else
-    echo "✗ Build failed: myArXiv.app not found"
+    echo "✗ Build failed: PaperTrail.app not found"
     exit 1
 fi

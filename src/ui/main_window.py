@@ -1,5 +1,5 @@
 """
-Main window for myArXiv application.
+Main window for PaperTrail application.
 Coordinates all UI components.
 """
 
@@ -40,7 +40,7 @@ class MainWindow(QMainWindow):
         self.fetch_service = fetch_service
         self.pdf_service = pdf_service
 
-        self.setWindowTitle("myArXiv - arXiv Paper Manager")
+        self.setWindowTitle("PaperTrail - arXiv Paper Manager")
         self.setMinimumSize(1000, 700)
         self.resize(1400, 900)  # Default size
 
@@ -384,8 +384,8 @@ class MainWindow(QMainWindow):
         """Show about dialog."""
         QMessageBox.about(
             self,
-            "About myArXiv",
-            "<h3>myArXiv</h3>"
+            "About PaperTrail",
+            "<h3>PaperTrail</h3>"
             "<p>arXiv Paper Management Application</p>"
             "<p>Version 0.5.0</p>"
             "<p>A desktop application for managing arXiv papers with "

@@ -1,5 +1,5 @@
 """
-Configuration service for myArXiv.
+Configuration service for PaperTrail.
 Manages application settings stored in database.
 """
 

@@ -1,5 +1,5 @@
 """
-Theme management system for myArXiv.
+Theme management system for PaperTrail.
 Provides light and dark theme color palettes and styling.
 """
 

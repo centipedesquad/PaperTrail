@@ -1,8 +1,8 @@
-# myArXiv Deployment Summary
+# PaperTrail Deployment Summary
 
 ## ✅ Application Bundling Complete
 
-The myArXiv application can now be built as a standalone macOS application bundle (.app) that can be installed in the Applications folder without requiring Python or any dependencies to be installed on the target system.
+The PaperTrail application can now be built as a standalone macOS application bundle (.app) that can be installed in the Applications folder without requiring Python or any dependencies to be installed on the target system.
 
 ## Build System
 
@@ -36,7 +36,7 @@ The `.app` bundle is completely self-contained and includes:
 
 ### Files Created for Building
 
-1. **myarxiv.spec** - PyInstaller configuration
+1. **papertrail.spec** - PyInstaller configuration
    - Defines what to include/exclude
    - Sets bundle metadata
    - Configures architecture and signing
@@ -66,17 +66,17 @@ The `.app` bundle is completely self-contained and includes:
 ./install.sh
 
 # Or manual install
-cp -r dist/myArXiv.app /Applications/
+cp -r dist/PaperTrail.app /Applications/
 ```
 
 ## Application Bundle Structure
 
 ```
-myArXiv.app/
+PaperTrail.app/
 ├── Contents/
 │   ├── Info.plist          # Bundle metadata
 │   ├── MacOS/
-│   │   └── myArXiv         # Executable
+│   │   └── PaperTrail         # Executable
 │   ├── Frameworks/         # Qt and Python libraries
 │   ├── Resources/          # Application resources
 │   │   ├── database/migrations/  # SQL migration files
@@ -87,10 +87,10 @@ myArXiv.app/
 
 ## Bundle Metadata
 
-- **Name**: myArXiv
-- **Bundle Identifier**: com.myarxiv.app
+- **Name**: PaperTrail
+- **Bundle Identifier**: com.papertrail.app
 - **Version**: 0.2.0
-- **Display Name**: myArXiv
+- **Display Name**: PaperTrail
 - **Minimum macOS**: 10.13
 - **High Resolution Capable**: Yes
 
@@ -100,7 +100,7 @@ When the user launches the application for the first time:
 
 1. Welcome dialog appears
 2. User chooses data directory location:
-   - Default: `~/Library/Application Support/myArXiv`
+   - Default: `~/Library/Application Support/PaperTrail`
    - Custom: Any folder they choose
 3. Database is initialized
 4. Folders created:
@@ -113,9 +113,9 @@ When the user launches the application for the first time:
 
 The application bundle is separate from user data:
 
-- **Application**: `/Applications/myArXiv.app` (read-only)
+- **Application**: `/Applications/PaperTrail.app` (read-only)
 - **User Data**: User-chosen location (read-write)
-- **Config**: `~/.myarxiv_config` (stores data directory path)
+- **Config**: `~/.papertrail_config` (stores data directory path)
 
 This means:
 - App can be updated without losing data
@@ -126,7 +126,7 @@ This means:
 ## Distribution Options
 
 ### Option 1: Direct .app Bundle
-- Distribute `myArXiv.app` directly
+- Distribute `PaperTrail.app` directly
 - Users drag to Applications folder
 - **Pros**: Simple, no installation needed
 - **Cons**: Large file (146 MB)
@@ -134,7 +134,7 @@ This means:
 ### Option 2: ZIP Archive
 ```bash
 cd dist
-zip -r myArXiv-0.2.0.zip myArXiv.app
+zip -r PaperTrail-0.2.0.zip PaperTrail.app
 ```
 - **Pros**: Compressed, easy to share
 - **Cons**: Users must unzip first
@@ -142,12 +142,12 @@ zip -r myArXiv-0.2.0.zip myArXiv.app
 ### Option 3: DMG Installer (Future)
 ```bash
 brew install create-dmg
-create-dmg --volname "myArXiv" \
+create-dmg --volname "PaperTrail" \
   --window-size 600 400 \
   --icon-size 100 \
-  --icon "myArXiv.app" 175 120 \
+  --icon "PaperTrail.app" 175 120 \
   --app-drop-link 425 120 \
-  "myArXiv-0.2.0.dmg" "dist/"
+  "PaperTrail-0.2.0.dmg" "dist/"
 ```
 - **Pros**: Professional, drag-and-drop installer
 - **Cons**: Requires create-dmg tool
@@ -163,7 +163,7 @@ Currently the application is **unsigned**. When users first open it:
 
 To bypass this warning:
 ```bash
-xattr -cr /Applications/myArXiv.app
+xattr -cr /Applications/PaperTrail.app
 ```
 
 ### Future: Proper Code Signing
@@ -173,7 +173,7 @@ To distribute widely, you should:
 2. Get Developer ID certificate
 3. Sign the application:
    ```bash
-   codesign --deep --force --sign "Developer ID Application: Your Name" myArXiv.app
+   codesign --deep --force --sign "Developer ID Application: Your Name" PaperTrail.app
    ```
 4. Notarize with Apple (required for macOS 10.15+)
 
@@ -181,27 +181,27 @@ To distribute widely, you should:
 
 ### Quick Test
 ```bash
-open dist/myArXiv.app
+open dist/PaperTrail.app
 ```
 
 ### Verify Bundle
 ```bash
 # Check bundle structure
-ls -la dist/myArXiv.app/Contents/
+ls -la dist/PaperTrail.app/Contents/
 
 # Check Info.plist
-plutil -p dist/myArXiv.app/Contents/Info.plist
+plutil -p dist/PaperTrail.app/Contents/Info.plist
 
 # Check executable
-file dist/myArXiv.app/Contents/MacOS/myArXiv
+file dist/PaperTrail.app/Contents/MacOS/PaperTrail
 
 # Check size
-du -sh dist/myArXiv.app
+du -sh dist/PaperTrail.app
 ```
 
 ### Run from Terminal (for debugging)
 ```bash
-dist/myArXiv.app/Contents/MacOS/myArXiv
+dist/PaperTrail.app/Contents/MacOS/PaperTrail
 ```
 This shows console output for debugging.
 
@@ -226,7 +226,7 @@ Future improvements to reduce bundle size:
 
 When releasing a new version:
 
-1. Update version in `myarxiv.spec`
+1. Update version in `papertrail.spec`
 2. Rebuild: `./build_app.sh`
 3. Test the new build
 4. Distribute updated bundle

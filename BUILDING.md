@@ -1,4 +1,4 @@
-# Building myArXiv for macOS
+# Building PaperTrail for macOS
 
 This document explains how to build a standalone macOS application bundle (.app) that can be installed in the Applications folder.
 
@@ -21,7 +21,7 @@ Simply run the build script:
 This will:
 1. Clean previous builds
 2. Build the application using PyInstaller
-3. Create `dist/myArXiv.app`
+3. Create `dist/PaperTrail.app`
 4. Verify the build
 
 ### Manual Build
@@ -36,7 +36,7 @@ source .venv/bin/activate
 rm -rf build dist
 
 # Build with PyInstaller
-pyinstaller --clean --noconfirm myarxiv.spec
+pyinstaller --clean --noconfirm papertrail.spec
 ```
 
 ## Installing the Application
@@ -46,7 +46,7 @@ After building, you have several options:
 ### Option 1: Copy to Applications (Recommended)
 
 ```bash
-cp -r dist/myArXiv.app /Applications/
+cp -r dist/PaperTrail.app /Applications/
 ```
 
 Then launch from Launchpad or Spotlight.
@@ -55,19 +55,19 @@ Then launch from Launchpad or Spotlight.
 
 1. Open Finder
 2. Navigate to the `dist` folder
-3. Drag `myArXiv.app` to your Applications folder
+3. Drag `PaperTrail.app` to your Applications folder
 
 ### Option 3: Run from Build Directory
 
 For testing before installing:
 
 ```bash
-open dist/myArXiv.app
+open dist/PaperTrail.app
 ```
 
 ## Application Bundle Details
 
-- **Bundle Identifier**: com.myarxiv.app
+- **Bundle Identifier**: com.papertrail.app
 - **Version**: 0.2.0
 - **Size**: ~146 MB
 - **Architecture**: Universal (Intel + Apple Silicon)
@@ -90,7 +90,7 @@ On first run, the application will:
 3. Create folder structure for PDFs and cache
 
 Default data location:
-- macOS: `~/Library/Application Support/myArXiv`
+- macOS: `~/Library/Application Support/PaperTrail`
 
 ## Troubleshooting
 
@@ -104,27 +104,27 @@ This is normal for unsigned applications. To allow:
 
 Or use Terminal:
 ```bash
-xattr -cr /Applications/myArXiv.app
+xattr -cr /Applications/PaperTrail.app
 ```
 
 ### Application won't start
 
 Check the Console app for error messages:
 1. Open Console.app
-2. Filter for "myArXiv"
+2. Filter for "PaperTrail"
 3. Try launching the app again
 4. Review any error messages
 
 ### Database issues
 
 If the database is corrupted, you can reset it:
-1. Delete `~/.myarxiv_config`
+1. Delete `~/.papertrail_config`
 2. Delete your data directory
 3. Restart the application
 
 ## Build Configuration
 
-The build is configured in `myarxiv.spec`:
+The build is configured in `papertrail.spec`:
 - Excluded packages to reduce size (matplotlib, numpy, etc.)
 - Included database migration scripts
 - Bundle metadata and Info.plist settings
@@ -142,8 +142,8 @@ To update an installed application:
 2. Close the running application
 3. Replace the app in /Applications:
    ```bash
-   rm -rf /Applications/myArXiv.app
-   cp -r dist/myArXiv.app /Applications/
+   rm -rf /Applications/PaperTrail.app
+   cp -r dist/PaperTrail.app /Applications/
    ```
 
 ## Creating a Distributable Package
@@ -153,9 +153,9 @@ For easier distribution, you can create a DMG file:
 ```bash
 # Create a DMG (requires create-dmg)
 brew install create-dmg
-create-dmg --volname "myArXiv" --window-size 600 400 --icon-size 100 \
-  --icon "myArXiv.app" 175 120 --app-drop-link 425 120 \
-  "myArXiv-0.2.0.dmg" "dist/"
+create-dmg --volname "PaperTrail" --window-size 600 400 --icon-size 100 \
+  --icon "PaperTrail.app" 175 120 --app-drop-link 425 120 \
+  "PaperTrail-0.2.0.dmg" "dist/"
 ```
 
 This creates a drag-and-drop installer DMG.

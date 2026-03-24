@@ -1,5 +1,5 @@
 """
-Filename utilities for myArXiv.
+Filename utilities for PaperTrail.
 Handles PDF filename pattern parsing and sanitization.
 """
 

@@ -24,11 +24,13 @@ ENV/
 *.swo
 *~
 
-# myArXiv specific
+# PaperTrail specific
 data/
+papertrail.db*
 myarxiv.db*
 test_db.sqlite*
 *.log
+.papertrail_config
 .myarxiv_config
 
 # OS
@@ -46,3 +48,4 @@ htmlcov/
 # Internal planning documents (not for repo)
 IMPLEMENTATION.md
 BUGS.md
+TASKS.md

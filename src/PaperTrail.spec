@@ -55,7 +55,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='myArXiv',
+    name='PaperTrail',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -75,12 +75,12 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='myArXiv',
+    name='PaperTrail',
 )
 
 app = BUNDLE(
     coll,
-    name='myArXiv.app',
+    name='PaperTrail.app',
     icon=None,
     bundle_identifier=None,
 )

@@ -1,5 +1,5 @@
 """
-Data models for myArXiv application using dataclasses.
+Data models for PaperTrail application using dataclasses.
 These provide type safety and clean interfaces for database entities.
 """
 

@@ -1,5 +1,5 @@
 """
-Database migration manager for myArXiv.
+Database migration manager for PaperTrail.
 Handles schema versioning and migrations.
 """
 

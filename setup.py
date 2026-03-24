@@ -1,5 +1,5 @@
 """
-Setup script for building myArXiv macOS application bundle.
+Setup script for building PaperTrail macOS application bundle.
 """
 
 from setuptools import setup
@@ -36,9 +36,9 @@ OPTIONS = {
     ],
     'iconfile': None,  # Will add icon later
     'plist': {
-        'CFBundleName': 'myArXiv',
-        'CFBundleDisplayName': 'myArXiv',
-        'CFBundleIdentifier': 'com.myarxiv.app',
+        'CFBundleName': 'PaperTrail',
+        'CFBundleDisplayName': 'PaperTrail',
+        'CFBundleIdentifier': 'com.papertrail.app',
         'CFBundleVersion': '0.2.0',
         'CFBundleShortVersionString': '0.2.0',
         'NSHighResolutionCapable': True,
@@ -55,10 +55,10 @@ OPTIONS = {
 }
 
 setup(
-    name='myArXiv',
+    name='PaperTrail',
     version='0.2.0',
     description='arXiv Paper Management Application',
-    author='myArXiv',
+    author='PaperTrail',
     app=APP,
     data_files=DATA_FILES,
     options={'py2app': OPTIONS},

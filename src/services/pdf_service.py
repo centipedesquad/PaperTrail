@@ -1,5 +1,5 @@
 """
-PDF service for myArXiv.
+PDF service for PaperTrail.
 Handles PDF downloading, streaming, and opening.
 """
 

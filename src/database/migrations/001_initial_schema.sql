@@ -1,4 +1,4 @@
--- myArXiv Initial Database Schema
+-- PaperTrail Initial Database Schema
 -- Version: 001
 -- Created: 2026-02-09
 

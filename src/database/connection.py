@@ -1,5 +1,5 @@
 """
-Database connection management for myArXiv.
+Database connection management for PaperTrail.
 Uses SQLite with WAL mode for better concurrency.
 """
 

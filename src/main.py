@@ -1,5 +1,5 @@
 """
-myArXiv - arXiv Paper Management Application
+PaperTrail - arXiv Paper Management Application
 Main entry point.
 """
 
@@ -26,7 +26,7 @@ from ui.theme import get_theme_manager, ThemeMode
 
 # Configure logging
 # Use user's home directory for log file (writable location)
-log_file = os.path.join(Path.home(), '.myarxiv.log')
+log_file = os.path.join(Path.home(), '.papertrail.log')
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -39,6 +39,47 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def migrate_legacy_names():
+    """Migrate from myArXiv naming to PaperTrail naming."""
+    home = Path.home()
+
+    # Migrate config file
+    old_config = home / ".myarxiv_config"
+    new_config = home / ".papertrail_config"
+    if old_config.exists() and not new_config.exists():
+        old_config.rename(new_config)
+        logger.info(f"Migrated config: {old_config} -> {new_config}")
+
+    # Migrate log file
+    old_log = home / ".myarxiv.log"
+    new_log = home / ".papertrail.log"
+    if old_log.exists() and not new_log.exists():
+        old_log.rename(new_log)
+
+    # Read config to find data directory, then migrate db within it
+    config_file = new_config if new_config.exists() else old_config
+    if config_file.exists():
+        data_dir = config_file.read_text().strip()
+        if os.path.exists(data_dir):
+            # Migrate database files
+            for suffix in ['', '-wal', '-shm']:
+                old_db = os.path.join(data_dir, f"myarxiv.db{suffix}")
+                new_db = os.path.join(data_dir, f"papertrail.db{suffix}")
+                if os.path.exists(old_db) and not os.path.exists(new_db):
+                    os.rename(old_db, new_db)
+                    logger.info(f"Migrated database: {old_db} -> {new_db}")
+
+        # Migrate data directory name (myArXiv -> PaperTrail)
+        if data_dir.endswith("myArXiv") or data_dir.endswith("myArXiv/"):
+            new_data_dir = data_dir.rstrip("/").rsplit("myArXiv", 1)[0] + "PaperTrail"
+            if os.path.exists(data_dir) and not os.path.exists(new_data_dir):
+                os.rename(data_dir, new_data_dir)
+                # Update config file to point to new path
+                new_config_path = new_config if new_config.exists() else old_config
+                new_config_path.write_text(new_data_dir)
+                logger.info(f"Migrated data dir: {data_dir} -> {new_data_dir}")
+
+
 def get_or_create_data_dir() -> str:
     """
     Get or create data directory.
@@ -48,7 +89,7 @@ def get_or_create_data_dir() -> str:
         Path to data directory
     """
     # Check if we have a saved data directory location
-    config_file = Path.home() / ".myarxiv_config"
+    config_file = Path.home() / ".papertrail_config"
 
     if config_file.exists():
         with open(config_file, 'r') as f:
@@ -61,10 +102,10 @@ def get_or_create_data_dir() -> str:
 
     msg = QMessageBox()
     msg.setIcon(QMessageBox.Information)
-    msg.setWindowTitle("Welcome to myArXiv")
+    msg.setWindowTitle("Welcome to PaperTrail")
     msg.setText("First time setup: Choose where to store your data")
     msg.setInformativeText(
-        f"myArXiv needs a location to store your database and PDF files.\n\n"
+        f"PaperTrail needs a location to store your database and PDF files.\n\n"
         f"Default location: {default_dir}\n\n"
         f"Click OK to use default, or Cancel to choose custom location."
     )
@@ -88,8 +129,8 @@ def get_or_create_data_dir() -> str:
             # User cancelled, use default
             data_dir = default_dir
         else:
-            # Add myArXiv subdirectory to chosen location
-            data_dir = os.path.join(data_dir, "myArXiv")
+            # Add PaperTrail subdirectory to chosen location
+            data_dir = os.path.join(data_dir, "PaperTrail")
 
     # Create directory structure
     ensure_directory_exists(data_dir)
@@ -111,7 +152,7 @@ def initialize_database_schema(data_dir: str):
     Args:
         data_dir: Data directory path
     """
-    db_path = os.path.join(data_dir, "myarxiv.db")
+    db_path = os.path.join(data_dir, "papertrail.db")
     logger.info(f"Initializing database at {db_path}")
 
     # Initialize database connection
@@ -154,12 +195,15 @@ def cleanup_on_exit(data_dir: str):
 
 def main():
     """Main application entry point."""
-    logger.info("Starting myArXiv application")
+    logger.info("Starting PaperTrail application")
+
+    # Migrate legacy myArXiv file names
+    migrate_legacy_names()
 
     # Create Qt application
     app = QApplication(sys.argv)
-    app.setApplicationName("myArXiv")
-    app.setOrganizationName("myArXiv")
+    app.setApplicationName("PaperTrail")
+    app.setOrganizationName("PaperTrail")
 
     try:
         # Get or create data directory
@@ -216,7 +260,7 @@ def main():
             None,
             "Application Error",
             f"An error occurred:\n\n{str(e)}\n\n"
-            f"Check myarxiv.log for details."
+            f"Check papertrail.log for details."
         )
 
         return 1

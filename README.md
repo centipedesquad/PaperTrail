@@ -1,4 +1,4 @@
-# myArXiv - arXiv Paper Management Application
+# PaperTrail - arXiv Paper Management Application
 
 A desktop application for efficiently managing and organizing arXiv papers for research workflows.
 
@@ -26,7 +26,7 @@ A desktop application for efficiently managing and organizing arXiv papers for r
 
 2. Copy to Applications folder:
    ```bash
-   cp -r dist/myArXiv.app /Applications/
+   cp -r dist/PaperTrail.app /Applications/
    ```
 
 3. Launch from Launchpad or Spotlight
@@ -73,7 +73,7 @@ python main.py
 ### Running the Installed App
 
 - Launch from Applications folder
-- Or: `open /Applications/myArXiv.app`
+- Or: `open /Applications/PaperTrail.app`
 
 ### First Run
 
@@ -159,7 +159,7 @@ You can set a custom reader path in Preferences.
 ### Project Structure
 
 ```
-myArXiv/
+PaperTrail/
 ├── src/
 │   ├── main.py                    # Application entry point
 │   ├── models.py                  # Data models
