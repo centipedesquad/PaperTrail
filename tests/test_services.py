@@ -207,5 +207,6 @@ class TestFetchService:
             fetch_service.arxiv_client, 'fetch_new_papers',
             side_effect=ConnectionError("Network down")
         ):
-            with pytest.raises(ConnectionError):
-                fetch_service.fetch_new_papers(['cs.AI'])
+            with patch('services.fetch_service.time.sleep'):  # skip retry delays
+                with pytest.raises(ConnectionError):
+                    fetch_service.fetch_new_papers(['cs.AI'])

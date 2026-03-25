@@ -27,8 +27,9 @@ def sanitize_fts5_query(query: str) -> str:
     """
     if not query or not query.strip():
         return ""
-    # Strip FTS5 special characters: quotes, parentheses, colons, carets, plus, minus, asterisks
-    cleaned = re.sub(r'["\(\)\{\}\[\]:^+\-*]', ' ', query)
+    # Strip control characters and FTS5 special characters
+    cleaned = re.sub(r'[\x00-\x1f\x7f]', ' ', query)
+    cleaned = re.sub(r'["\(\)\{\}\[\]:^+\-*]', ' ', cleaned)
     # Split into tokens and wrap each in double quotes for literal matching
     tokens = cleaned.split()
     if not tokens:
