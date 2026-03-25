@@ -1,0 +1,55 @@
+#!/bin/sh
+# .githooks/pre-push
+#
+# Enforces GIT_WORKFLOW.md release rules:
+# - Pushes to main must have a version tag (v0.X.0) on the commit
+# - Pushes to any other branch pass through untouched
+#
+# Called with: remote_name remote_url
+# Stdin: <local_ref> <local_sha> <remote_ref> <remote_sha>
+
+while read local_ref local_sha remote_ref remote_sha; do
+    # Only check pushes targeting main
+    case "$remote_ref" in
+        refs/heads/main)
+            ;;
+        *)
+            continue
+            ;;
+    esac
+
+    # Skip delete pushes
+    if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+        continue
+    fi
+
+    # Check if the commit has a version tag
+    TAGS=$(git tag --points-at "$local_sha" 2>/dev/null)
+    HAS_VERSION_TAG=false
+    for tag in $TAGS; do
+        case "$tag" in
+            v[0-9]*)
+                HAS_VERSION_TAG=true
+                ;;
+        esac
+    done
+
+    if [ "$HAS_VERSION_TAG" = false ]; then
+        echo ""
+        echo "BLOCKED: Pushing to main requires a version tag on the commit."
+        echo ""
+        echo "  Commit: $(echo "$local_sha" | cut -c1-8)"
+        echo "  Tags found: ${TAGS:-none}"
+        echo ""
+        echo "  To fix:"
+        echo "    git tag -a v0.X.0 -m 'Release v0.X.0'"
+        echo "    git push origin main --tags"
+        echo ""
+        echo "  See GIT_WORKFLOW.md for the release workflow."
+        exit 1
+    fi
+
+    echo "Pushing release $TAGS to main."
+done
+
+exit 0

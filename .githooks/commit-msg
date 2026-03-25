@@ -1,0 +1,55 @@
+#!/bin/sh
+# .githooks/commit-msg
+#
+# Enforces GIT_WORKFLOW.md commit message rules:
+# - Block empty messages
+# - Block vague messages on main (warn on dev)
+# - Suggest imperative mood (non-blocking)
+# - Warn on long subject lines (non-blocking)
+
+MSG_FILE="$1"
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+# Read subject line (first non-comment, non-empty line)
+SUBJECT=$(sed '/^#/d; /^$/d' "$MSG_FILE" | head -1)
+SUBJECT=$(echo "$SUBJECT" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+# --- Block empty messages ---
+if [ -z "$SUBJECT" ]; then
+    echo "BLOCKED: Commit message cannot be empty."
+    exit 1
+fi
+
+# --- Block vague messages ---
+LOWER_SUBJECT=$(echo "$SUBJECT" | tr '[:upper:]' '[:lower:]')
+VAGUE_MESSAGES="fixed stuff update changes wip temp asdf test fix stuff misc"
+
+for vague in $VAGUE_MESSAGES; do
+    if [ "$LOWER_SUBJECT" = "$vague" ]; then
+        if [ "$BRANCH" = "main" ]; then
+            echo "BLOCKED: Vague commit message '$SUBJECT' is not allowed on main."
+            echo "  Use a descriptive message explaining what changed and why."
+            echo "  See GIT_WORKFLOW.md for commit message guidelines."
+            exit 1
+        else
+            echo "WARNING: '$SUBJECT' is a vague commit message. Consider being more descriptive."
+        fi
+    fi
+done
+
+# --- Suggest imperative mood (non-blocking) ---
+FIRST_WORD=$(echo "$SUBJECT" | awk '{print $1}')
+case "$FIRST_WORD" in
+    Added|Fixed|Updated|Removed|Changed|Deleted|Moved|Renamed)
+        echo "HINT: Use imperative mood in commit subjects (e.g., 'Add' not 'Added')."
+        echo "  '$SUBJECT'"
+        ;;
+esac
+
+# --- Warn on long subjects (non-blocking) ---
+LENGTH=$(printf '%s' "$SUBJECT" | wc -c | tr -d ' ')
+if [ "$LENGTH" -gt 72 ]; then
+    echo "HINT: Subject line is $LENGTH chars. Aim for 72 or fewer."
+fi
+
+exit 0
