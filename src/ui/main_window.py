@@ -63,8 +63,8 @@ class MainWindow(QMainWindow):
 
         # Left: Nav rail (180px)
         self.filter_panel = FilterPanelWidget()
-        self.filter_panel.setMinimumWidth(160)
-        self.filter_panel.setMaximumWidth(240)
+        self.filter_panel.setMinimumWidth(200)
+        self.filter_panel.setMaximumWidth(300)
         self.filter_panel.filters_changed.connect(self._on_filters_changed)
         splitter.addWidget(self.filter_panel)
 
@@ -77,8 +77,8 @@ class MainWindow(QMainWindow):
 
         # Right: Context panel (240px)
         self.context_panel = ContextPanelWidget()
-        self.context_panel.setMinimumWidth(220)
-        self.context_panel.setMaximumWidth(320)
+        self.context_panel.setMinimumWidth(280)
+        self.context_panel.setMaximumWidth(420)
         self.context_panel.view_pdf_requested.connect(self._on_view_pdf)
         self.context_panel.delete_pdf_requested.connect(self._on_delete_pdf)
         self.context_panel.rating_changed.connect(self._on_rating_changed)
@@ -89,7 +89,7 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(0, 0)  # Nav rail: fixed
         splitter.setStretchFactor(1, 1)  # Feed: stretches
         splitter.setStretchFactor(2, 0)  # Context: fixed
-        splitter.setSizes([180, 980, 240])
+        splitter.setSizes([230, 840, 330])
 
         main_layout.addWidget(splitter)
         self.splitter = splitter
