@@ -5,6 +5,7 @@ Uses SQLite with WAL mode for better concurrency.
 
 import sqlite3
 import os
+import threading
 from pathlib import Path
 from contextlib import contextmanager
 from typing import Optional
@@ -25,6 +26,7 @@ class DatabaseConnection:
         """
         self.db_path = db_path
         self._connection: Optional[sqlite3.Connection] = None
+        self._lock = threading.RLock()
 
         # Ensure parent directory exists
         db_dir = os.path.dirname(db_path)
@@ -79,8 +81,9 @@ class DatabaseConnection:
         Returns:
             Cursor object
         """
-        conn = self.connect()
-        return conn.execute(query, params)
+        with self._lock:
+            conn = self.connect()
+            return conn.execute(query, params)
 
     def executemany(self, query: str, params_list: list) -> sqlite3.Cursor:
         """
@@ -93,8 +96,9 @@ class DatabaseConnection:
         Returns:
             Cursor object
         """
-        conn = self.connect()
-        return conn.executemany(query, params_list)
+        with self._lock:
+            conn = self.connect()
+            return conn.executemany(query, params_list)
 
     def fetch_one(self, query: str, params: tuple = ()) -> Optional[sqlite3.Row]:
         """
@@ -107,8 +111,10 @@ class DatabaseConnection:
         Returns:
             Single row or None
         """
-        cursor = self.execute(query, params)
-        return cursor.fetchone()
+        with self._lock:
+            conn = self.connect()
+            cursor = conn.execute(query, params)
+            return cursor.fetchone()
 
     def fetch_all(self, query: str, params: tuple = ()) -> list:
         """
@@ -121,29 +127,36 @@ class DatabaseConnection:
         Returns:
             List of rows
         """
-        cursor = self.execute(query, params)
-        return cursor.fetchall()
+        with self._lock:
+            conn = self.connect()
+            cursor = conn.execute(query, params)
+            return cursor.fetchall()
 
     def commit(self):
         """Commit current transaction."""
-        if self._connection:
-            self._connection.commit()
+        with self._lock:
+            if self._connection:
+                self._connection.commit()
 
     def rollback(self):
         """Rollback current transaction."""
-        if self._connection:
-            self._connection.rollback()
+        with self._lock:
+            if self._connection:
+                self._connection.rollback()
 
     @contextmanager
     def transaction(self):
         """
         Context manager for transactions.
+        Thread-safe: holds the lock for the entire transaction to prevent
+        interleaving of operations from different threads.
 
         Usage:
             with db.transaction():
                 db.execute("INSERT ...")
                 db.execute("UPDATE ...")
         """
+        self._lock.acquire()
         conn = self.connect()
         try:
             yield conn
@@ -152,6 +165,8 @@ class DatabaseConnection:
             conn.rollback()
             logger.error(f"Transaction failed: {e}")
             raise
+        finally:
+            self._lock.release()
 
     def vacuum(self):
         """

@@ -4,6 +4,7 @@ Implements CRUD operations for all entities.
 """
 
 import logging
+import re
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
@@ -14,6 +15,25 @@ from models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def sanitize_fts5_query(query: str) -> str:
+    """Sanitize user input for safe use in FTS5 MATCH queries.
+
+    FTS5 has its own query syntax where characters like quotes, parentheses,
+    and boolean operators (AND/OR/NOT/NEAR) cause OperationalError if used
+    as raw input. This function escapes the input by wrapping each token
+    in double quotes to force literal matching.
+    """
+    if not query or not query.strip():
+        return ""
+    # Strip FTS5 special characters: quotes, parentheses, colons, carets, plus, minus, asterisks
+    cleaned = re.sub(r'["\(\)\{\}\[\]:^+\-*]', ' ', query)
+    # Split into tokens and wrap each in double quotes for literal matching
+    tokens = cleaned.split()
+    if not tokens:
+        return ""
+    return ' '.join(f'"{token}"' for token in tokens)
 
 
 class PaperRepository:
@@ -34,72 +54,78 @@ class PaperRepository:
         """
         try:
             with self.db.transaction():
-                # Check if paper already exists
-                existing = self.db.fetch_one(
-                    "SELECT id FROM papers WHERE arxiv_id = ?",
-                    (paper_data['arxiv_id'],)
-                )
-                if existing:
-                    logger.info(f"Paper already exists: {paper_data['arxiv_id']}")
-                    return existing['id']
-
-                # Insert paper
-                cursor = self.db.execute(
-                    """
-                    INSERT INTO papers (
-                        arxiv_id, title, abstract, publication_date, pdf_url,
-                        version, comment, journal_ref, doi
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        paper_data['arxiv_id'],
-                        paper_data['title'],
-                        paper_data['abstract'],
-                        paper_data['publication_date'],
-                        paper_data['pdf_url'],
-                        paper_data.get('version'),
-                        paper_data.get('comment'),
-                        paper_data.get('journal_ref'),
-                        paper_data.get('doi')
-                    )
-                )
-                paper_id = cursor.lastrowid
-
-                # Add authors
-                if 'authors' in paper_data:
-                    for i, author_data in enumerate(paper_data['authors']):
-                        author_id = self._get_or_create_author(
-                            author_data['name'],
-                            author_data['normalized_name']
-                        )
-                        self.db.execute(
-                            """
-                            INSERT INTO paper_authors (paper_id, author_id, author_order)
-                            VALUES (?, ?, ?)
-                            """,
-                            (paper_id, author_id, i)
-                        )
-
-                # Add categories
-                if 'categories' in paper_data:
-                    primary_category = paper_data.get('primary_category')
-                    for category_code in paper_data['categories']:
-                        category_id = self._get_or_create_category(category_code)
-                        is_primary = (category_code == primary_category)
-                        self.db.execute(
-                            """
-                            INSERT INTO paper_categories (paper_id, category_id, is_primary)
-                            VALUES (?, ?, ?)
-                            """,
-                            (paper_id, category_id, is_primary)
-                        )
-
-                logger.info(f"Created paper: {paper_data['arxiv_id']} (ID: {paper_id})")
-                return paper_id
-
+                return self._create_inner(paper_data)
         except Exception as e:
             logger.error(f"Failed to create paper: {e}")
             return None
+
+    def _create_inner(self, paper_data: dict) -> Optional[int]:
+        """
+        Create a paper without managing its own transaction.
+        Caller must wrap this in a transaction.
+        """
+        # Check if paper already exists
+        existing = self.db.fetch_one(
+            "SELECT id FROM papers WHERE arxiv_id = ?",
+            (paper_data['arxiv_id'],)
+        )
+        if existing:
+            logger.info(f"Paper already exists: {paper_data['arxiv_id']}")
+            return None
+
+        # Insert paper
+        cursor = self.db.execute(
+            """
+            INSERT INTO papers (
+                arxiv_id, title, abstract, publication_date, pdf_url,
+                version, comment, journal_ref, doi
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                paper_data['arxiv_id'],
+                paper_data['title'],
+                paper_data['abstract'],
+                paper_data['publication_date'],
+                paper_data['pdf_url'],
+                paper_data.get('version'),
+                paper_data.get('comment'),
+                paper_data.get('journal_ref'),
+                paper_data.get('doi')
+            )
+        )
+        paper_id = cursor.lastrowid
+
+        # Add authors
+        if 'authors' in paper_data:
+            for i, author_data in enumerate(paper_data['authors']):
+                author_id = self._get_or_create_author(
+                    author_data['name'],
+                    author_data['normalized_name']
+                )
+                self.db.execute(
+                    """
+                    INSERT INTO paper_authors (paper_id, author_id, author_order)
+                    VALUES (?, ?, ?)
+                    """,
+                    (paper_id, author_id, i)
+                )
+
+        # Add categories
+        if 'categories' in paper_data:
+            primary_category = paper_data.get('primary_category')
+            for category_code in paper_data['categories']:
+                category_id = self._get_or_create_category(category_code)
+                is_primary = (category_code == primary_category)
+                self.db.execute(
+                    """
+                    INSERT INTO paper_categories (paper_id, category_id, is_primary)
+                    VALUES (?, ?, ?)
+                    """,
+                    (paper_id, category_id, is_primary)
+                )
+
+        logger.info(f"Created paper: {paper_data['arxiv_id']} (ID: {paper_id})")
+        return paper_id
 
     def get_by_id(self, paper_id: int) -> Optional[Paper]:
         """Get paper by ID with all related data."""
@@ -188,11 +214,13 @@ class PaperRepository:
         params = []
 
         if search_text:
-            # Use FTS5 for full-text search
-            where_clauses.append(
-                "id IN (SELECT rowid FROM papers_fts WHERE papers_fts MATCH ?)"
-            )
-            params.append(search_text)
+            # Use FTS5 for full-text search (sanitize input to prevent crashes)
+            sanitized = sanitize_fts5_query(search_text)
+            if sanitized:
+                where_clauses.append(
+                    "id IN (SELECT rowid FROM papers_fts WHERE papers_fts MATCH ?)"
+                )
+                params.append(sanitized)
 
         if categories:
             placeholders = ','.join('?' * len(categories))
