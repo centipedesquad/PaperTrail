@@ -36,7 +36,12 @@ A desktop application for efficiently managing and organizing arXiv papers for r
    cp -r dist/PaperTrail.app /Applications/
    ```
 
-3. Launch from Launchpad or Spotlight
+3. If macOS Gatekeeper blocks the app (since it is not notarized), run:
+   ```bash
+   xattr -cr /Applications/PaperTrail.app
+   ```
+
+4. Launch from Launchpad or Spotlight
 
 See [BUILDING.md](BUILDING.md) for detailed build instructions.
 
