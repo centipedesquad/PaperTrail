@@ -20,6 +20,7 @@ class PaperFeedWidget(QWidget):
 
     # Signals
     view_pdf_requested = Signal(int)  # paper_id
+    delete_pdf_requested = Signal(int)  # paper_id
     rating_changed = Signal(int, str, str, str)  # paper_id, importance, comprehension, technicality
     note_changed = Signal(int, str)  # paper_id, note_text
 
@@ -90,6 +91,7 @@ class PaperFeedWidget(QWidget):
 
             # Connect signals
             cell.view_pdf_clicked.connect(self.view_pdf_requested.emit)
+            cell.delete_pdf_clicked.connect(self.delete_pdf_requested.emit)
             cell.rating_changed.connect(self.rating_changed.emit)
             cell.note_changed.connect(self.note_changed.emit)
 
@@ -111,6 +113,7 @@ class PaperFeedWidget(QWidget):
 
         # Connect signals
         cell.view_pdf_clicked.connect(self.view_pdf_requested.emit)
+        cell.delete_pdf_clicked.connect(self.delete_pdf_requested.emit)
         cell.rating_changed.connect(self.rating_changed.emit)
         cell.note_changed.connect(self.note_changed.emit)
 

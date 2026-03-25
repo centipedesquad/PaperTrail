@@ -85,6 +85,7 @@ class MainWindow(QMainWindow):
         # Paper feed (right side)
         self.paper_feed = PaperFeedWidget()
         self.paper_feed.view_pdf_requested.connect(self._on_view_pdf)
+        self.paper_feed.delete_pdf_requested.connect(self._on_delete_pdf)
         self.paper_feed.rating_changed.connect(self._on_rating_changed)
         self.paper_feed.note_changed.connect(self._on_note_changed)
         splitter.addWidget(self.paper_feed)
@@ -447,6 +448,42 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Error viewing PDF: {e}")
             QMessageBox.critical(self, "Error", f"Failed to view PDF:\n\n{str(e)}")
+
+    def _on_delete_pdf(self, paper_id: int):
+        """Handle delete PDF request with confirmation."""
+        try:
+            paper = self.paper_service.get_paper(paper_id)
+            if not paper:
+                return
+
+            if not self.pdf_service.has_local_pdf(paper):
+                self._update_statusbar("No local PDF to delete", 3000)
+                return
+
+            # Confirmation dialog
+            reply = QMessageBox.question(
+                self,
+                "Delete PDF",
+                f"Delete the local PDF for:\n\n{paper.title}\n\nThe paper entry will be kept.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+
+            if reply != QMessageBox.Yes:
+                return
+
+            success = self.pdf_service.delete_pdf(paper)
+            if success:
+                self._update_statusbar("PDF deleted", 3000)
+                # Refresh to update button visibility
+                filters = self.filter_panel.get_filters()
+                self._load_papers(filters)
+            else:
+                QMessageBox.critical(self, "Error", "Failed to delete PDF.")
+
+        except Exception as e:
+            logger.error(f"Error deleting PDF: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to delete PDF:\n\n{str(e)}")
 
     def _on_rating_changed(self, paper_id: int, importance: str, comprehension: str, technicality: str):
         """

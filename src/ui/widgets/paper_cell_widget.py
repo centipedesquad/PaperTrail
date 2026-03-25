@@ -23,6 +23,7 @@ class PaperCellWidget(QWidget):
 
     # Signals
     view_pdf_clicked = Signal(int)  # paper_id
+    delete_pdf_clicked = Signal(int)  # paper_id
     rating_changed = Signal(int, str, str, str)  # paper_id, importance, comprehension, technicality
     note_changed = Signal(int, str)  # paper_id, note_text
 
@@ -207,14 +208,6 @@ class PaperCellWidget(QWidget):
         view_pdf_btn.setStyleSheet(theme.get_widget_style('button_primary'))
         buttons_layout.addWidget(view_pdf_btn)
 
-        # Notes button - commented out per user request
-        # self.notes_btn = QPushButton("Notes")
-        # self.notes_btn.setFixedHeight(28)
-        # self.notes_btn.setMinimumWidth(80)
-        # self.notes_btn.clicked.connect(self._toggle_notes)
-        # self.notes_btn.setStyleSheet(theme.get_widget_style('button_secondary'))
-        # buttons_layout.addWidget(self.notes_btn)
-
         self.rating_btn = QPushButton("Rate Paper")
         self.rating_btn.setFixedHeight(28)
         self.rating_btn.setMinimumWidth(100)
@@ -223,7 +216,19 @@ class PaperCellWidget(QWidget):
         self.rating_btn.setStyleSheet(theme.get_widget_style('button_success'))
         buttons_layout.addWidget(self.rating_btn)
 
+        # Push delete button to the right, separated from action buttons
         buttons_layout.addStretch()
+
+        # Delete PDF button - only visible when paper has a local PDF
+        import os
+        if self.paper.local_pdf_path and os.path.exists(self.paper.local_pdf_path):
+            delete_pdf_btn = QPushButton("Delete PDF")
+            delete_pdf_btn.setFixedHeight(28)
+            delete_pdf_btn.setMinimumWidth(100)
+            delete_pdf_btn.setToolTip("Delete the locally saved PDF file")
+            delete_pdf_btn.clicked.connect(lambda: self.delete_pdf_clicked.emit(self.paper.id))
+            delete_pdf_btn.setStyleSheet(theme.get_widget_style('button_secondary'))
+            buttons_layout.addWidget(delete_pdf_btn)
         content_layout.addLayout(buttons_layout)
 
         # Inline rating widget (hidden by default)

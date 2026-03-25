@@ -194,6 +194,48 @@ class TestPDFServiceErrors:
             result = pdf_service.download_pdf(self._make_paper(), permanent=False)
         assert result is None
 
+    def test_delete_pdf_removes_file_and_clears_path(self, db, paper_service, sample_paper_data):
+        import tempfile
+        pdf_service = self._make_pdf_service(db)
+
+        # Create a paper and a fake PDF file
+        paper_id = paper_service.create_paper(sample_paper_data)
+        pdf_file = tempfile.NamedTemporaryFile(suffix='.pdf', delete=False)
+        pdf_file.write(b'%PDF-fake')
+        pdf_file.close()
+
+        # Set the local_pdf_path in database
+        paper_service.update_pdf_path(paper_id, pdf_file.name)
+        paper = paper_service.get_paper(paper_id)
+        assert paper.local_pdf_path == pdf_file.name
+
+        # Delete the PDF
+        success = pdf_service.delete_pdf(paper)
+        assert success is True
+        assert not os.path.exists(pdf_file.name)
+
+        # Verify path cleared in database
+        paper = paper_service.get_paper(paper_id)
+        assert paper.local_pdf_path is None
+
+    def test_delete_pdf_no_local_path(self, db):
+        pdf_service = self._make_pdf_service(db)
+        paper = self._make_paper()
+        paper.local_pdf_path = None
+        assert pdf_service.delete_pdf(paper) is True
+
+    def test_has_local_pdf_false_when_no_path(self, db):
+        pdf_service = self._make_pdf_service(db)
+        paper = self._make_paper()
+        paper.local_pdf_path = None
+        assert not pdf_service.has_local_pdf(paper)
+
+    def test_has_local_pdf_false_when_file_missing(self, db):
+        pdf_service = self._make_pdf_service(db)
+        paper = self._make_paper()
+        paper.local_pdf_path = '/nonexistent/path.pdf'
+        assert not pdf_service.has_local_pdf(paper)
+
 
 # ── Search input validation ─────────────────────────────────────────
 
