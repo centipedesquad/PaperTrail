@@ -49,3 +49,4 @@ htmlcov/
 IMPLEMENTATION.md
 BUGS.md
 TASKS.md
+.gstack/
