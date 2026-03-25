@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QToolBar, QStatusBar, QMessageBox, QSplitter, QLabel, QDialog, QApplication
 )
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QKeySequence, QCursor
 
 from ui.widgets.paper_feed_widget import PaperFeedWidget
 from ui.widgets.filter_panel_widget import FilterPanelWidget
@@ -166,11 +166,13 @@ class MainWindow(QMainWindow):
 
         # Fetch papers button
         fetch_action = QAction("Fetch Papers", self)
+        fetch_action.setToolTip("Fetch new papers from arXiv (Ctrl+F)")
         fetch_action.triggered.connect(self._fetch_papers)
         toolbar.addAction(fetch_action)
 
         # Refresh button
         refresh_action = QAction("Refresh", self)
+        refresh_action.setToolTip("Refresh paper list with current filters")
         refresh_action.triggered.connect(self._refresh_papers)
         toolbar.addAction(refresh_action)
 
@@ -178,6 +180,7 @@ class MainWindow(QMainWindow):
 
         # Settings button
         settings_action = QAction("Settings", self)
+        settings_action.setToolTip("Open application preferences")
         settings_action.triggered.connect(self._show_preferences)
         toolbar.addAction(settings_action)
 
@@ -268,6 +271,7 @@ class MainWindow(QMainWindow):
         # Start worker
         self.fetch_worker.start()
 
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         self._update_statusbar("Fetching papers...")
 
     def _on_fetch_progress(self, percentage: int, message: str):
@@ -279,6 +283,7 @@ class MainWindow(QMainWindow):
 
     def _on_fetch_finished(self, result: dict):
         """Handle fetch completion."""
+        QApplication.restoreOverrideCursor()
         self._update_statusbar(
             f"Fetched {result['created']} new papers ({result['duplicates']} duplicates)",
             5000
@@ -297,6 +302,7 @@ class MainWindow(QMainWindow):
 
     def _on_fetch_error(self, error: str):
         """Handle fetch error."""
+        QApplication.restoreOverrideCursor()
         self._update_statusbar("Fetch failed", 5000)
 
         # Update dialog if it exists
@@ -524,6 +530,7 @@ class MainWindow(QMainWindow):
 
         # Start download
         self.pdf_worker.start()
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         self._update_statusbar("Downloading PDF...")
 
     def _on_pdf_progress(self, percentage: int, message: str):
@@ -532,6 +539,7 @@ class MainWindow(QMainWindow):
 
     def _on_pdf_finished(self, paper, pdf_path: str):
         """Handle PDF download completion."""
+        QApplication.restoreOverrideCursor()
         self._update_statusbar("Download complete, opening PDF...", 2000)
 
         # Open the PDF
@@ -545,6 +553,7 @@ class MainWindow(QMainWindow):
 
     def _on_pdf_error(self, error: str):
         """Handle PDF download error."""
+        QApplication.restoreOverrideCursor()
         self._update_statusbar("PDF download failed", 5000)
         QMessageBox.critical(
             self,

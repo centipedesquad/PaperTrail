@@ -72,10 +72,12 @@ class FilterPanelWidget(QWidget):
 
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("Search titles, abstracts, authors...")
+        self.search_input.setToolTip("Full-text search across paper titles, abstracts, and authors")
         self.search_input.returnPressed.connect(self._on_filters_changed)
         search_layout.addWidget(self.search_input)
 
         search_btn = QPushButton("Search")
+        search_btn.setToolTip("Apply search query")
         search_btn.clicked.connect(self._on_filters_changed)
         search_layout.addWidget(search_btn)
 
@@ -206,6 +208,7 @@ class FilterPanelWidget(QWidget):
 
         # Clear filters button
         clear_btn = QPushButton("Clear All Filters")
+        clear_btn.setToolTip("Reset all search and filter criteria")
         clear_btn.clicked.connect(self.clear_filters)
         container_layout.addWidget(clear_btn)
 
