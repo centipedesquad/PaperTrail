@@ -90,5 +90,5 @@ app = BUNDLE(
     coll,
     name='PaperTrail.app',
     icon=os.path.join(src_dir, 'assets', 'AppIcon.icns'),
-    bundle_identifier=None,
+    bundle_identifier='io.github.centipedesquad.papertrail',
 )

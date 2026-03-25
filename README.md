@@ -234,15 +234,6 @@ PaperTrail/
 pytest tests/
 ```
 
-### Development Phases
-
-- ✅ **Phase 1**: Foundation (database, config, platform utils)
-- ✅ **Phase 2**: arXiv Integration (API client, fetch service)
-- ✅ **Phase 3**: PDF Management
-- ✅ **Phase 4**: Ratings & Notes
-- ✅ **Phase 5**: Search & Filtering
-- 🚧 **Phase 6**: Polish & Testing (theme, preferences done; tests, error handling pending)
-
 ## Future Features
 
 - Author citation metrics from InspireHEP
@@ -252,7 +243,7 @@ pytest tests/
 
 ## License
 
-MIT License
+AGPL-3.0-only. See [LICENSE](LICENSE) for details.
 
 ## Contributing
 
