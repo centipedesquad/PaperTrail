@@ -27,6 +27,8 @@ class PaperCellWidget(QWidget):
         super().__init__(parent)
         self.paper = paper
         self.is_selected = False
+        self.abstract_label = None
+        self._base_font_size = QApplication.instance().font().pointSize() or 11
         self._setup_ui()
 
     def _setup_ui(self):
@@ -101,20 +103,20 @@ class PaperCellWidget(QWidget):
         meta_layout.addStretch()
         container_layout.addLayout(meta_layout)
 
-        # Abstract preview — 2 lines, DM Sans
+        # Abstract — truncated when collapsed, full when selected
         if self.paper.abstract:
             abstract_text = self.paper.abstract
             if len(abstract_text) > 200:
                 abstract_text = abstract_text[:200] + "..."
-            abstract_label = QLabel(abstract_text)
-            abstract_label.setWordWrap(True)
-            abstract_label.setMaximumHeight(int(base_font_size * 3.5))
-            abstract_label.setFont(theme.get_body_font(size_pt=int(base_font_size * 0.91)))
-            abstract_label.setStyleSheet(f"""
+            self.abstract_label = QLabel(abstract_text)
+            self.abstract_label.setWordWrap(True)
+            self.abstract_label.setMaximumHeight(int(base_font_size * 3.5))
+            self.abstract_label.setFont(theme.get_body_font(size_pt=int(base_font_size * 0.91)))
+            self.abstract_label.setStyleSheet(f"""
                 color: {theme.get_color('text_secondary')};
                 border: none; background: transparent;
             """)
-            container_layout.addWidget(abstract_label)
+            container_layout.addWidget(self.abstract_label)
 
         main_layout.addWidget(self.container)
 
@@ -152,6 +154,16 @@ class PaperCellWidget(QWidget):
     def set_selected(self, selected: bool):
         self.is_selected = selected
         self._apply_style(selected)
+        if self.abstract_label and self.paper.abstract:
+            if selected:
+                self.abstract_label.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX
+                self.abstract_label.setText(self.paper.abstract)
+            else:
+                text = self.paper.abstract
+                if len(text) > 200:
+                    text = text[:200] + "..."
+                self.abstract_label.setText(text)
+                self.abstract_label.setMaximumHeight(int(self._base_font_size * 3.5))
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
