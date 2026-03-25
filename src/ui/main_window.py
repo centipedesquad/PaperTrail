@@ -90,6 +90,7 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(1, 1)  # Feed: stretches
         splitter.setStretchFactor(2, 0)  # Context: fixed
         splitter.setSizes([230, 840, 330])
+        splitter.setHandleWidth(3)
 
         main_layout.addWidget(splitter)
         self.splitter = splitter
