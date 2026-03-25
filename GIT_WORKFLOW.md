@@ -4,25 +4,26 @@ This document explains the git branching strategy and workflow for the PaperTrai
 
 ## Branch Structure
 
-### `main` branch - Clean Releases Only
+### `main` branch - Clean Releases
 
-**Purpose**: Production-ready code that users can clone and run from source.
+**Purpose**: Production-ready code that users can clone, run from source, or build into a `.app`.
 
 **Contains**:
-- ✅ Source code (`src/` directory)
-- ✅ Dependencies (`requirements.txt`)
-- ✅ Documentation (`README.md`)
-- ✅ Run script (`run.sh`)
-- ✅ Git configuration (`.gitignore`, `.gitattributes`)
+- Source code (`src/` directory)
+- Dependencies (`pyproject.toml`)
+- Documentation (`README.md`, `BUILDING.md`, `CHANGELOG.md`)
+- Run script (`run.sh`)
+- Build scripts (`build_app.sh`, `install.sh`)
+- Build configuration (`papertrail.spec`)
+- Git configuration (`.gitignore`, `.gitattributes`)
 
 **Does NOT contain**:
-- ❌ Build scripts (`build_app.sh`, `install.sh`)
-- ❌ Build configuration (`papertrail.spec`, `setup.py`)
-- ❌ Build documentation (`BUILDING.md`, `DEPLOYMENT.md`)
-- ❌ Test files (`test_phase2.py`)
-- ❌ Internal planning documents (`IMPLEMENTATION.md`)
-- ❌ Build artifacts (`dist/`, `build/`)
-- ❌ Runtime files (`data/`, `*.log`)
+- Test files (`test_phase2.py`)
+- Internal planning documents (`IMPLEMENTATION.md`)
+- Internal deployment docs (`DEPLOYMENT.md`)
+- Unused build configs (`setup.py`)
+- Build artifacts (`dist/`, `build/`)
+- Runtime files (`data/`, `*.log`)
 
 **Commit Policy**:
 - Only release commits
@@ -32,19 +33,18 @@ This document explains the git branching strategy and workflow for the PaperTrai
 
 ### `dev` branch - Development History
 
-**Purpose**: Active development with full build tooling and documentation.
+**Purpose**: Active development with full tooling, tests, and internal documentation.
 
 **Contains**:
-- ✅ Everything from `main` branch
-- ✅ Build scripts and tools
-- ✅ Build documentation
-- ✅ Test files
-- ✅ Development helpers
+- Everything from `main` branch
+- Test files
+- Internal deployment docs (`DEPLOYMENT.md`)
+- Development helpers
 
 **Does NOT contain**:
-- ❌ Internal planning (`IMPLEMENTATION.md`) - see .gitignore
-- ❌ Build artifacts (`.app`, `dist/`, `build/`)
-- ❌ Runtime files (`data/`, logs)
+- Internal planning (`IMPLEMENTATION.md`) - see .gitignore
+- Build artifacts (`.app`, `dist/`, `build/`)
+- Runtime files (`data/`, logs)
 
 **Commit Policy**:
 - Phase completion commits
@@ -54,7 +54,7 @@ This document explains the git branching strategy and workflow for the PaperTrai
 
 ## File Locations
 
-### Source Code (Both Branches)
+### Source Code & Build Tools (Both Branches)
 
 ```
 src/
@@ -86,18 +86,19 @@ src/
     ├── platform_utils.py
     ├── async_utils.py
     └── filename_utils.py
-```
 
-### Build Files (dev branch only)
-
-```
-build_app.sh        - Build script
-install.sh          - Installation script
-papertrail.spec        - PyInstaller configuration
-setup.py            - py2app configuration (unused)
-test_phase2.py      - Integration tests
+build_app.sh        - Build .app bundle
+install.sh          - Install to /Applications
+papertrail.spec     - PyInstaller configuration
 BUILDING.md         - Build instructions
-DEPLOYMENT.md       - Deployment guide
+```
+
+### Dev-Only Files (dev branch only)
+
+```
+test_phase2.py      - Integration tests
+setup.py            - py2app configuration (unused)
+DEPLOYMENT.md       - Internal deployment/distribution guide
 ```
 
 ### Ignored Files (Not in repo)
@@ -113,24 +114,48 @@ __pycache__/        - Python cache
 .DS_Store           - macOS files
 ```
 
+## Git Hooks
+
+The project includes git hooks in `.githooks/` that enforce workflow rules automatically.
+
+### Setup (run once after cloning)
+
+```bash
+sh .githooks/setup.sh
+```
+
+### What the hooks check
+
+| Hook | What it catches |
+|------|----------------|
+| `pre-commit` | Secrets files (`.env`, credentials) on any branch; dev-only files and build artifacts on `main` |
+| `commit-msg` | Empty messages; vague messages like "fix" or "wip" (blocked on `main`, warned on `dev`) |
+| `pre-push` | Pushes to `main` without a version tag (`v0.X.0`) |
+
+To bypass in an emergency: `git commit --no-verify` or `git push --no-verify`
+
 ## Workflow
 
 ### For Users (Cloning from main)
 
+#### Run from source
 ```bash
-# Clone the repository
 git clone <repo-url>
 cd PaperTrail
-
-# Install dependencies
-uv venv
-uv pip install -r requirements.txt
-
-# Run the application
+uv sync
 ./run.sh
 ```
 
-**Result**: Clean source code, no build clutter.
+#### Build and install the .app
+```bash
+git clone <repo-url>
+cd PaperTrail
+uv sync
+./build_app.sh
+./install.sh
+```
+
+**Result**: Full source code with build tools — users can run from source or build a native `.app`.
 
 ### For Developers (Working with dev)
 
@@ -141,8 +166,7 @@ cd PaperTrail
 git checkout dev
 
 # Install dependencies
-uv venv
-uv pip install -r requirements.txt
+uv sync
 
 # Run from source
 ./run.sh
@@ -154,7 +178,7 @@ uv pip install -r requirements.txt
 ./install.sh
 ```
 
-**Result**: Full development environment with build tools.
+**Result**: Full development environment with tests and internal docs.
 
 ## Development Workflow
 
@@ -200,29 +224,47 @@ uv pip install -r requirements.txt
    git commit -am "Bump version to 0.4.0"
    ```
 
-4. **Cherry-pick source changes to main**:
+4. **Review what changed since last release**:
+   ```bash
+   git log main..dev --oneline          # Commit summary
+   git diff --stat main..dev            # Files changed
+   ```
+
+5. **Cherry-pick release files to main**:
    ```bash
    git checkout main
-   git checkout dev -- src/
-   git checkout dev -- requirements.txt
-   git checkout dev -- README.md
+   git checkout dev -- src/ pyproject.toml README.md run.sh LICENSE build_app.sh install.sh BUILDING.md
    git add .
-   git commit -m "Release v0.4.0 - Phase 4: Ratings & Notes
-
-   Features:
-   - Inline rating widgets
-   - Note editor with auto-save
-   - Visual indicators
-
-   See dev branch for build instructions."
    ```
 
-5. **Tag the release**:
+6. **Update CHANGELOG.md** on main with the new release entry:
+   ```markdown
+   ## v0.4.0 — 2026-XX-XX
+
+   ### Added
+   - Feature 1
+   - Feature 2
+
+   ### Changed
+   - Change 1
+
+   ### Fixed
+   - Bug fix 1
+   ```
+   Use the diff log from step 4 to ensure nothing is missed.
+
+7. **Commit and tag**:
    ```bash
-   git tag -a v0.4.0 -m "Release v0.4.0"
+   git add CHANGELOG.md
+   git commit -m "Summary of changes since last release
+
+   - Feature or fix 1
+   - Feature or fix 2
+   - Feature or fix 3"
+   git tag -a v0.4.0 -m "v0.4.0"
    ```
 
-6. **Switch back to dev for continued work**:
+8. **Switch back to dev for continued work**:
    ```bash
    git checkout dev
    ```
@@ -258,31 +300,30 @@ Phase 4: Ratings & Notes
 **Bad**:
 ```
 Fixed stuff
-
-Co-Authored-By: Claude <email>  # DON'T include this
 ```
 
 ### Rules
 
-- ❌ **NO** `Co-Authored-By:` lines
-- ✅ Clear, descriptive messages
-- ✅ Imperative mood ("Add feature" not "Added feature")
-- ✅ Reference phase/issue if applicable
-- ✅ Explain WHY if not obvious
+- Clear, descriptive messages
+- Imperative mood ("Add feature" not "Added feature")
+- Reference phase/issue if applicable
+- Explain WHY if not obvious
 
 ## Merging Strategy
 
 ### dev → main (Releases only)
 
-**Method**: Cherry-pick source files, NOT merge
+**Method**: Cherry-pick source and build files, NOT merge
 
-**Why**: Keeps main clean without build files
+**Why**: Keeps main free of test files, WIP commits, and internal docs
 
 **Command**:
 ```bash
 git checkout main
-git checkout dev -- src/ requirements.txt README.md
-git commit -m "Release vX.Y.Z"
+git checkout dev -- src/ pyproject.toml README.md run.sh LICENSE build_app.sh install.sh BUILDING.md
+# Update CHANGELOG.md with release notes
+git add .
+git commit -m "Summary of changes since last release"
 ```
 
 ### Feature branches → dev
@@ -329,7 +370,7 @@ git diff main..dev -- src/            # Compare just source code
 3. **Clean commits** - One logical change per commit
 4. **Meaningful messages** - Explain what and why
 5. **Tag releases** - Use semantic versioning (v0.3.0, v0.4.0, etc.)
-6. **Keep main clean** - Only source code needed to run
+6. **Keep main focused** - Source code and build tools only, no tests or internal docs
 7. **Document changes** - Update README for user-facing changes
 8. **No secrets** - Never commit API keys, passwords, or personal data
 
@@ -345,15 +386,6 @@ git checkout main
 git reset --hard HEAD~1
 ```
 
-### "I need a build file from dev while on main"
-
-```bash
-# Don't commit it! Just copy temporarily
-git checkout dev -- build_app.sh
-# Use it, but don't commit
-git checkout HEAD -- build_app.sh  # Undo
-```
-
 ### "How do I see what's different between branches?"
 
 ```bash
@@ -366,7 +398,7 @@ git diff main..dev              # Full diff
 
 **Branches**:
 - `main`: v0.3.0 (Phases 1-3 complete)
-- `dev`: v0.3.0 + build tools
+- `dev`: v0.3.0 + tests + internal docs
 
 **Next**:
 - Phase 4 development on `dev`
@@ -374,5 +406,5 @@ git diff main..dev              # Full diff
 
 ---
 
-**Last Updated**: 2026-02-09
+**Last Updated**: 2025-03-25
 **Maintained by**: Project Team

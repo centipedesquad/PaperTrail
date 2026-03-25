@@ -56,15 +56,9 @@ See [BUILDING.md](BUILDING.md) for detailed build instructions.
 
 1. Clone or download this repository
 
-2. Create a virtual environment:
+2. Install dependencies:
 ```bash
-uv venv
-```
-
-3. Install dependencies:
-```bash
-uv pip install "PySide6>=6.6.0" "arxiv>=2.1.0" "requests>=2.31.0" \
-               "python-dateutil>=2.8.2" "PyMuPDF>=1.23.0"
+uv sync
 ```
 
 ## Usage
@@ -231,7 +225,7 @@ PaperTrail/
 │       └── filename_utils.py
 ├── data/                          # Runtime data (user-chosen location)
 ├── tests/                         # Test suite
-└── requirements.txt
+└── pyproject.toml
 ```
 
 ### Running Tests
