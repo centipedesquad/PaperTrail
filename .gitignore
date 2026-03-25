@@ -49,4 +49,6 @@ htmlcov/
 IMPLEMENTATION.md
 BUGS.md
 TASKS.md
+DESIGN.md
+CLAUDE.md
 .gstack/

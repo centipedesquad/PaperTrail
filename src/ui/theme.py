@@ -1,15 +1,27 @@
 """
 Theme management system for PaperTrail.
-Provides light and dark theme color palettes and styling.
+Editorial/Scholarly design system with warm amber accent and stone neutrals.
+See DESIGN.md for the full design system specification.
 """
 
 import logging
+import os
 from enum import Enum
 from typing import Dict
-from PySide6.QtGui import QPalette, QColor
+from PySide6.QtGui import QPalette, QColor, QFontDatabase, QFont
 from PySide6.QtWidgets import QApplication
 
 logger = logging.getLogger(__name__)
+
+# Font family constants — used throughout the application
+FONT_DISPLAY = 'Source Serif 4'
+FONT_BODY = 'DM Sans'
+FONT_MONO = 'JetBrains Mono'
+
+# Fallback stacks for each role
+FONT_DISPLAY_STACK = f"'{FONT_DISPLAY}', Georgia, serif"
+FONT_BODY_STACK = f"'{FONT_BODY}', -apple-system, sans-serif"
+FONT_MONO_STACK = f"'{FONT_MONO}', 'SF Mono', monospace"
 
 
 class ThemeMode(Enum):
@@ -22,12 +34,6 @@ class ColorPalette:
     """Color palette definition for a theme."""
 
     def __init__(self, colors: Dict[str, str]):
-        """
-        Initialize color palette.
-
-        Args:
-            colors: Dictionary mapping color names to hex values
-        """
         self.colors = colors
 
     def get(self, name: str) -> str:
@@ -35,102 +41,128 @@ class ColorPalette:
         return self.colors.get(name, "#000000")
 
 
-# Light Theme Color Palette (Tailwind-inspired)
+# Light Theme — Warm stone neutrals + amber accent (DESIGN.md)
 LIGHT_PALETTE = ColorPalette({
     # Backgrounds
-    'background': '#F8F9FA',           # Soft white
-    'surface': '#FFFFFF',              # Pure white for cards
-    'surface_hover': '#F1F5F9',        # Light hover state
+    'background': '#FDFBF7',           # Warm white
+    'surface': '#FFFFFF',              # Pure white for cards/panels
+    'surface_hover': '#F5F2ED',        # Warm hover state
+    'surface_alt': '#F7F4EF',          # Alternate background (sidebar)
 
     # Text
-    'text_primary': '#1F2937',         # Dark gray
-    'text_secondary': '#6B7280',       # Medium gray
-    'text_tertiary': '#9CA3AF',        # Light gray
+    'text_primary': '#1C1917',         # Warm near-black (stone-900)
+    'text_secondary': '#78716C',       # Warm medium gray (stone-500)
+    'text_tertiary': '#A8A29E',        # Warm light gray (stone-400)
 
     # Borders
-    'border': '#E5E7EB',               # Subtle gray
-    'border_hover': '#D1D5DB',         # Darker on hover
+    'border': '#E7E5E4',              # Warm stone (stone-300)
+    'border_hover': '#D6D3D1',        # Darker stone (stone-400)
 
-    # Primary accent (Professional blue)
-    'primary': '#2563EB',              # Main blue
-    'primary_hover': '#1D4ED8',        # Darker blue
-    'primary_light': '#DBEAFE',        # Light blue background
+    # Primary accent — Amber (NOT blue)
+    'primary': '#B45309',             # Amber-700
+    'primary_hover': '#92400E',       # Amber-800
+    'primary_light': '#FEF3C7',       # Amber-100
 
-    # Success (Modern green)
-    'success': '#10B981',              # Green
-    'success_hover': '#059669',        # Darker green
-    'success_light': '#D1FAE5',        # Light green background
+    # Success — Olive green
+    'success': '#4D7C0F',             # Lime-700
+    'success_hover': '#3F6212',       # Lime-800
+    'success_light': '#ECFCCB',       # Lime-100
 
-    # Warning/Important (Amber)
-    'warning': '#F59E0B',              # Amber
-    'warning_hover': '#D97706',        # Darker amber
-    'warning_light': '#FEF3C7',        # Light amber background
+    # Warning — Amber
+    'warning': '#D97706',             # Amber-600
+    'warning_hover': '#B45309',       # Amber-700
+    'warning_light': '#FEF3C7',       # Amber-100
 
-    # Secondary (Slate)
-    'secondary': '#64748B',            # Slate
-    'secondary_hover': '#475569',      # Darker slate
-    'secondary_light': '#F1F5F9',      # Light slate background
+    # Secondary — Warm stone for secondary actions
+    'secondary': '#78716C',           # Stone-500
+    'secondary_hover': '#57534E',     # Stone-600
+    'secondary_light': '#F5F5F4',     # Stone-100
 
     # Special states
-    'error': '#EF4444',                # Red
-    'info': '#3B82F6',                 # Blue
-    'disabled': '#D1D5DB',             # Light gray
+    'error': '#BE123C',               # Rose-700
+    'info': '#0369A1',                # Sky-700
+    'disabled': '#D6D3D1',            # Stone-300
 })
 
 
-# Dark Theme Color Palette (Tailwind-inspired)
+# Dark Theme — Warm dark + bright amber accent (DESIGN.md)
 DARK_PALETTE = ColorPalette({
     # Backgrounds
-    'background': '#0F172A',           # Deep navy
-    'surface': '#1E293B',              # Elevated dark
-    'surface_hover': '#334155',        # Lighter on hover
+    'background': '#1C1917',           # Warm dark (stone-900)
+    'surface': '#292524',              # Elevated (stone-800)
+    'surface_hover': '#3D3835',        # Lighter hover
+    'surface_alt': '#242120',          # Alternate dark
 
     # Text
-    'text_primary': '#F1F5F9',         # Light gray
-    'text_secondary': '#94A3B8',       # Medium slate
-    'text_tertiary': '#64748B',        # Darker slate
+    'text_primary': '#F5F5F4',         # Warm white (stone-50)
+    'text_secondary': '#A8A29E',       # Medium stone (stone-400)
+    'text_tertiary': '#78716C',        # Darker stone (stone-500)
 
     # Borders
-    'border': '#334155',               # Subtle dark
-    'border_hover': '#475569',         # Lighter on hover
+    'border': '#3D3835',              # Warm dark border
+    'border_hover': '#57534E',        # Lighter border (stone-600)
 
-    # Primary accent (Bright blue)
-    'primary': '#60A5FA',              # Bright blue
-    'primary_hover': '#3B82F6',        # Slightly darker
-    'primary_light': '#1E3A8A',        # Dark blue background
+    # Primary accent — Bright amber for dark backgrounds
+    'primary': '#F59E0B',             # Amber-400
+    'primary_hover': '#FBBF24',       # Amber-300 (lighter for hover)
+    'primary_light': '#451A03',       # Amber-950 dark bg
 
-    # Success (Bright green)
-    'success': '#34D399',              # Bright green
-    'success_hover': '#10B981',        # Darker green
-    'success_light': '#064E3B',        # Dark green background
+    # Success — Bright lime
+    'success': '#84CC16',             # Lime-400
+    'success_hover': '#A3E635',       # Lime-300
+    'success_light': '#1A2E05',       # Dark lime bg
 
-    # Warning/Important (Bright amber)
-    'warning': '#FBBF24',              # Bright amber
-    'warning_hover': '#F59E0B',        # Darker amber
-    'warning_light': '#78350F',        # Dark amber background
+    # Warning — Bright amber
+    'warning': '#FBBF24',             # Amber-300
+    'warning_hover': '#F59E0B',       # Amber-400
+    'warning_light': '#451A03',       # Amber-950
 
-    # Secondary (Light slate)
-    'secondary': '#94A3B8',            # Light slate
-    'secondary_hover': '#CBD5E1',      # Lighter slate
-    'secondary_light': '#334155',      # Dark slate background
+    # Secondary — Light stone
+    'secondary': '#A8A29E',           # Stone-400
+    'secondary_hover': '#D6D3D1',     # Stone-300
+    'secondary_light': '#3D3835',     # Dark stone bg
 
     # Special states
-    'error': '#F87171',                # Bright red
-    'info': '#60A5FA',                 # Bright blue
-    'disabled': '#475569',             # Dark gray
+    'error': '#FB7185',               # Rose-400
+    'info': '#38BDF8',                # Sky-400
+    'disabled': '#57534E',            # Stone-600
 })
+
+
+def load_fonts():
+    """Load bundled fonts from assets/fonts/ directory."""
+    fonts_dir = os.path.join(os.path.dirname(__file__), '..', 'assets', 'fonts')
+    fonts_dir = os.path.normpath(fonts_dir)
+
+    if not os.path.isdir(fonts_dir):
+        logger.warning(f"Fonts directory not found: {fonts_dir}")
+        return
+
+    loaded = 0
+    for filename in os.listdir(fonts_dir):
+        if filename.endswith(('.ttf', '.otf')):
+            font_path = os.path.join(fonts_dir, filename)
+            font_id = QFontDatabase.addApplicationFont(font_path)
+            if font_id >= 0:
+                families = QFontDatabase.applicationFontFamilies(font_id)
+                logger.info(f"Loaded font: {filename} -> {families}")
+                loaded += 1
+            else:
+                logger.warning(f"Failed to load font: {filename}")
+
+    logger.info(f"Loaded {loaded} font files from {fonts_dir}")
 
 
 class ThemeManager:
-    """Manages application theming and color palettes."""
+    """Manages application theming, color palettes, and typography."""
 
     def __init__(self):
-        """Initialize theme manager."""
         self._current_mode = ThemeMode.LIGHT
         self._palettes = {
             ThemeMode.LIGHT: LIGHT_PALETTE,
             ThemeMode.DARK: DARK_PALETTE,
         }
+        self._fonts_loaded = False
 
     @property
     def current_mode(self) -> ThemeMode:
@@ -143,40 +175,31 @@ class ThemeManager:
         return self._palettes[self._current_mode]
 
     def set_theme(self, mode: ThemeMode):
-        """
-        Set the current theme mode.
-
-        Args:
-            mode: Theme mode to set
-        """
         if mode != self._current_mode:
             self._current_mode = mode
             logger.info(f"Theme changed to: {mode.value}")
 
     def get_color(self, name: str) -> str:
-        """
-        Get color from current palette.
-
-        Args:
-            name: Color name (e.g., 'primary', 'background')
-
-        Returns:
-            Hex color string
-        """
         return self.palette.get(name)
 
     def apply_to_app(self, app: QApplication):
-        """
-        Apply current theme to Qt application.
+        # Load fonts on first apply
+        if not self._fonts_loaded:
+            load_fonts()
+            self._fonts_loaded = True
 
-        Args:
-            app: QApplication instance
-        """
-        # Set application palette
+        # Set application-wide font to DM Sans
+        app_font = QFont(FONT_BODY)
+        point_size = app.font().pointSize()
+        if point_size > 0:
+            app_font.setPointSize(point_size)
+        else:
+            app_font.setPointSize(11)
+        app.setFont(app_font)
+
         palette = self._create_qt_palette()
         app.setPalette(palette)
 
-        # Set global stylesheet
         stylesheet = self._generate_stylesheet()
         app.setStyleSheet(stylesheet)
 
@@ -186,24 +209,19 @@ class ThemeManager:
         """Create Qt palette from current theme colors."""
         palette = QPalette()
 
-        # Window colors
         palette.setColor(QPalette.Window, QColor(self.get_color('background')))
         palette.setColor(QPalette.WindowText, QColor(self.get_color('text_primary')))
 
-        # Base colors (for text entry, etc.)
         palette.setColor(QPalette.Base, QColor(self.get_color('surface')))
         palette.setColor(QPalette.AlternateBase, QColor(self.get_color('surface_hover')))
         palette.setColor(QPalette.Text, QColor(self.get_color('text_primary')))
 
-        # Button colors
         palette.setColor(QPalette.Button, QColor(self.get_color('surface')))
         palette.setColor(QPalette.ButtonText, QColor(self.get_color('text_primary')))
 
-        # Highlights
         palette.setColor(QPalette.Highlight, QColor(self.get_color('primary')))
         palette.setColor(QPalette.HighlightedText, QColor('#FFFFFF'))
 
-        # Links
         palette.setColor(QPalette.Link, QColor(self.get_color('primary')))
         palette.setColor(QPalette.LinkVisited, QColor(self.get_color('primary_hover')))
 
@@ -212,19 +230,19 @@ class ThemeManager:
     def _generate_stylesheet(self) -> str:
         """Generate global Qt stylesheet for current theme."""
         return f"""
-        /* Global application styles */
+        /* Global application styles — Editorial/Scholarly theme */
         QMainWindow, QDialog {{
             background-color: {self.get_color('background')};
             color: {self.get_color('text_primary')};
+            font-family: {FONT_BODY_STACK};
         }}
 
-        /* Default widget background - transparent for nested widgets */
         QWidget {{
             background-color: transparent;
             color: {self.get_color('text_primary')};
+            font-family: {FONT_BODY_STACK};
         }}
 
-        /* Override background for top-level widgets only */
         QMainWindow > QWidget {{
             background-color: {self.get_color('background')};
         }}
@@ -232,13 +250,13 @@ class ThemeManager:
         /* Scroll bars */
         QScrollBar:vertical {{
             background: {self.get_color('surface')};
-            width: 12px;
+            width: 10px;
             border: none;
         }}
         QScrollBar::handle:vertical {{
             background: {self.get_color('border_hover')};
             min-height: 20px;
-            border-radius: 6px;
+            border-radius: 5px;
             margin: 2px;
         }}
         QScrollBar::handle:vertical:hover {{
@@ -249,13 +267,13 @@ class ThemeManager:
         }}
         QScrollBar:horizontal {{
             background: {self.get_color('surface')};
-            height: 12px;
+            height: 10px;
             border: none;
         }}
         QScrollBar::handle:horizontal {{
             background: {self.get_color('border_hover')};
             min-width: 20px;
-            border-radius: 6px;
+            border-radius: 5px;
             margin: 2px;
         }}
         QScrollBar::handle:horizontal:hover {{
@@ -265,13 +283,14 @@ class ThemeManager:
             width: 0px;
         }}
 
-        /* Text inputs */
+        /* Text inputs — 2px radius per DESIGN.md */
         QLineEdit, QTextEdit, QPlainTextEdit {{
             background-color: {self.get_color('surface')};
             border: 1px solid {self.get_color('border')};
-            border-radius: 4px;
+            border-radius: 2px;
             padding: 6px;
             color: {self.get_color('text_primary')};
+            font-family: {FONT_BODY_STACK};
         }}
         QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus {{
             border-color: {self.get_color('primary')};
@@ -281,9 +300,10 @@ class ThemeManager:
         QComboBox {{
             background-color: {self.get_color('surface')};
             border: 1px solid {self.get_color('border')};
-            border-radius: 4px;
+            border-radius: 2px;
             padding: 5px 10px;
             color: {self.get_color('text_primary')};
+            font-family: {FONT_BODY_STACK};
         }}
         QComboBox:hover {{
             border-color: {self.get_color('border_hover')};
@@ -298,13 +318,15 @@ class ThemeManager:
             color: {self.get_color('text_primary')};
         }}
 
-        /* Buttons */
+        /* Buttons — 2px radius per DESIGN.md */
         QPushButton {{
             background-color: {self.get_color('surface')};
             border: 1px solid {self.get_color('border')};
-            border-radius: 4px;
+            border-radius: 2px;
             padding: 6px 16px;
             color: {self.get_color('text_primary')};
+            font-family: {FONT_BODY_STACK};
+            font-weight: 500;
         }}
         QPushButton:hover {{
             background-color: {self.get_color('surface_hover')};
@@ -327,7 +349,7 @@ class ThemeManager:
             width: 18px;
             height: 18px;
             border: 1px solid {self.get_color('border')};
-            border-radius: 3px;
+            border-radius: 2px;
             background-color: {self.get_color('surface')};
         }}
         QCheckBox::indicator:hover {{
@@ -338,10 +360,10 @@ class ThemeManager:
             border-color: {self.get_color('primary')};
         }}
 
-        /* Group boxes */
+        /* Group boxes — 4px radius for cards/panels */
         QGroupBox {{
             border: 1px solid {self.get_color('border')};
-            border-radius: 6px;
+            border-radius: 4px;
             margin-top: 12px;
             padding-top: 12px;
             font-weight: bold;
@@ -400,13 +422,14 @@ class ThemeManager:
             border: 1px solid {self.get_color('border')};
             color: {self.get_color('text_primary')};
             padding: 4px;
+            border-radius: 2px;
         }}
 
         /* Date edit */
         QDateEdit {{
             background-color: {self.get_color('surface')};
             border: 1px solid {self.get_color('border')};
-            border-radius: 4px;
+            border-radius: 2px;
             padding: 5px;
             color: {self.get_color('text_primary')};
         }}
@@ -442,25 +465,19 @@ class ThemeManager:
         """
 
     def get_widget_style(self, widget_type: str, **kwargs) -> str:
-        """
-        Generate custom stylesheet for specific widget types.
-
-        Args:
-            widget_type: Type of widget (e.g., 'paper_cell', 'button_primary')
-            **kwargs: Additional parameters
-
-        Returns:
-            CSS stylesheet string
-        """
+        """Generate custom stylesheet for specific widget types."""
         styles = {
             'paper_cell': f"""
                 QFrame {{
-                    border: 1px solid {self.get_color('border')};
-                    border-radius: 8px;
+                    border: none;
+                    border-bottom: 1px solid {self.get_color('border')};
+                    border-left: 3px solid transparent;
+                    border-radius: 0px;
                     background-color: {self.get_color('surface')};
                 }}
                 QFrame:hover {{
-                    border-color: {self.get_color('border_hover')};
+                    border-left: 3px solid {self.get_color('primary')};
+                    background-color: {self.get_color('surface_hover')};
                 }}
                 QFrame QWidget {{
                     background-color: transparent;
@@ -477,7 +494,7 @@ class ThemeManager:
                     color: white;
                     border: none;
                     padding: 4px 12px;
-                    border-radius: 4px;
+                    border-radius: 2px;
                     font-weight: 500;
                 }}
                 QPushButton:hover {{
@@ -493,7 +510,7 @@ class ThemeManager:
                     color: white;
                     border: none;
                     padding: 4px 12px;
-                    border-radius: 4px;
+                    border-radius: 2px;
                     font-weight: 500;
                 }}
                 QPushButton:hover {{
@@ -509,7 +526,7 @@ class ThemeManager:
                     color: white;
                     border: none;
                     padding: 4px 12px;
-                    border-radius: 4px;
+                    border-radius: 2px;
                     font-weight: 500;
                 }}
                 QPushButton:hover {{

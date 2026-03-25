@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from models import Paper
 from ui.widgets.paper_cell_widget import PaperCellWidget
+from ui.theme import get_theme_manager
 
 logger = logging.getLogger(__name__)
 
@@ -57,12 +58,13 @@ class PaperFeedWidget(QWidget):
         # Empty state label
         self.empty_label = QLabel("No papers to display.\n\nClick 'Fetch Papers' to get started.")
         self.empty_label.setAlignment(Qt.AlignCenter)
-        self.empty_label.setStyleSheet("""
-            QLabel {
-                color: #999;
+        theme = get_theme_manager()
+        self.empty_label.setStyleSheet(f"""
+            QLabel {{
+                color: {theme.get_color('text_tertiary')};
                 font-size: 14pt;
                 padding: 50px;
-            }
+            }}
         """)
         self.container_layout.addWidget(self.empty_label)
 

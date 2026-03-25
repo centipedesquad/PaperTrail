@@ -25,6 +25,14 @@ for root, dirs, files in os.walk(src_dir):
                 dest_dir = os.path.dirname(rel_path) if os.path.dirname(rel_path) else '.'
                 datas.append((full_path, dest_dir))
 
+# Add font files from assets/fonts
+fonts_dir = os.path.join(src_dir, 'assets', 'fonts')
+if os.path.isdir(fonts_dir):
+    for file in os.listdir(fonts_dir):
+        if file.endswith(('.ttf', '.otf')):
+            full_path = os.path.join(fonts_dir, file)
+            datas.append((full_path, os.path.join('assets', 'fonts')))
+
 # Also add migration SQL files
 for root, dirs, files in os.walk(os.path.join(src_dir, 'database', 'migrations')):
     for file in files:
