@@ -40,15 +40,12 @@ class PDFActionDialog(QDialog):
         layout = QVBoxLayout(self)
 
         # Title
+        theme = get_theme_manager()
+
         title_label = QLabel("PDF not downloaded yet")
-        title_font = QFont()
-        title_font.setPointSize(14)
-        title_font.setBold(True)
+        title_font = theme.get_display_font(size_pt=14)
         title_label.setFont(title_font)
         layout.addWidget(title_label)
-
-        # Paper info
-        theme = get_theme_manager()
         paper_label = QLabel(f"Paper: {paper_title}")
         paper_label.setWordWrap(True)
         paper_label.setStyleSheet(f"color: {theme.get_color('text_secondary')}; margin-bottom: 10px;")
@@ -72,9 +69,7 @@ class PDFActionDialog(QDialog):
 
         download_layout = QVBoxLayout()
         download_title = QLabel("Download & Keep")
-        download_title_font = QFont()
-        download_title_font.setBold(True)
-        download_title.setFont(download_title_font)
+        download_title.setFont(theme.get_display_font(bold=True))
         download_layout.addWidget(download_title)
 
         download_desc = QLabel(
@@ -99,9 +94,7 @@ class PDFActionDialog(QDialog):
 
         stream_layout = QVBoxLayout()
         stream_title = QLabel("Stream (Temporary)")
-        stream_title_font = QFont()
-        stream_title_font.setBold(True)
-        stream_title.setFont(stream_title_font)
+        stream_title.setFont(theme.get_display_font(bold=True))
         stream_layout.addWidget(stream_title)
 
         stream_desc = QLabel(

@@ -182,6 +182,31 @@ class ThemeManager:
     def get_color(self, name: str) -> str:
         return self.palette.get(name)
 
+    def get_display_font(self, size_pt: int = None, bold: bool = False) -> QFont:
+        """Return a QFont for display/heading use (Source Serif 4)."""
+        font = QFont(FONT_DISPLAY)
+        if size_pt:
+            font.setPointSize(size_pt)
+        if bold:
+            font.setBold(True)
+        return font
+
+    def get_body_font(self, size_pt: int = None, weight: int = None) -> QFont:
+        """Return a QFont for body/UI use (DM Sans)."""
+        font = QFont(FONT_BODY)
+        if size_pt:
+            font.setPointSize(size_pt)
+        if weight:
+            font.setWeight(weight)
+        return font
+
+    def get_mono_font(self, size_pt: int = None) -> QFont:
+        """Return a QFont for data/metadata use (JetBrains Mono)."""
+        font = QFont(FONT_MONO)
+        if size_pt:
+            font.setPointSize(size_pt)
+        return font
+
     def apply_to_app(self, app: QApplication):
         # Load fonts on first apply
         if not self._fonts_loaded:

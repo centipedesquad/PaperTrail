@@ -97,7 +97,7 @@ class RatingWidget(QWidget):
             QComboBox {{
                 padding: 5px;
                 border: 1px solid {theme.get_color('border')};
-                border-radius: 3px;
+                border-radius: 2px;
                 background-color: {theme.get_color('surface')};
                 color: {theme.get_color('text_primary')};
             }}

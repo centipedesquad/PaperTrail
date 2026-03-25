@@ -5,10 +5,10 @@ Provides inline text editor with auto-save functionality.
 
 import logging
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QLabel, QTextEdit
+    QWidget, QVBoxLayout, QLabel, QTextEdit, QApplication
 )
 from PySide6.QtCore import Qt, Signal, QTimer
-from ui.theme import get_theme_manager
+from ui.theme import get_theme_manager, FONT_BODY_STACK
 
 logger = logging.getLogger(__name__)
 
@@ -59,8 +59,8 @@ class NoteEditorWidget(QWidget):
                 border: 1px solid {theme.get_color('border')};
                 border-radius: 4px;
                 padding: 8px;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-                font-size: 11pt;
+                font-family: {FONT_BODY_STACK};
+                font-size: {QApplication.instance().font().pointSize() or 11}pt;
                 background-color: {theme.get_color('surface')};
                 color: {theme.get_color('text_primary')};
             }}

@@ -1,307 +1,159 @@
 """
-Collapsible paper cell widget.
-Displays paper information in an expandable card.
+Paper cell widget.
+Displays paper information as a compact card in the feed.
+Click to select — details shown in the context panel.
 """
 
 import logging
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QFrame, QSizePolicy, QApplication
+    QFrame, QSizePolicy, QApplication
 )
-from PySide6.QtCore import Qt, Signal, QPropertyAnimation, QEasingCurve
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QCursor
 from models import Paper
-from ui.widgets.rating_widget import RatingWidget
-from ui.widgets.note_editor_widget import NoteEditorWidget
 from ui.theme import get_theme_manager
 
 logger = logging.getLogger(__name__)
 
 
 class PaperCellWidget(QWidget):
-    """Collapsible widget for displaying paper information."""
+    """Compact paper card for the feed. Click to select."""
 
     # Signals
-    view_pdf_clicked = Signal(int)  # paper_id
-    delete_pdf_clicked = Signal(int)  # paper_id
-    rating_changed = Signal(int, str, str, str)  # paper_id, importance, comprehension, technicality
-    note_changed = Signal(int, str)  # paper_id, note_text
+    clicked = Signal(object)  # Paper object
 
     def __init__(self, paper: Paper, parent=None):
-        """
-        Initialize paper cell widget.
-
-        Args:
-            paper: Paper object to display
-            parent: Parent widget
-        """
         super().__init__(parent)
         self.paper = paper
-        self.is_expanded = False  # Start collapsed for better scanning
-        self.rating_visible = False
-        self.notes_visible = False
-
+        self.is_selected = False
         self._setup_ui()
 
     def _setup_ui(self):
-        """Setup UI components."""
-        # Main layout
+        theme = get_theme_manager()
+        base_font_size = QApplication.instance().font().pointSize() or 11
+
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 8)  # Bottom margin for spacing between cells
+        main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Get theme manager and base font size
-        theme = get_theme_manager()
-        base_font_size = QApplication.instance().font().pointSize()
-
-        # Container frame with border
+        # Container frame with left-border accent on hover
         self.container = QFrame()
-        self.container.setFrameShape(QFrame.Box)
-        self.container.setStyleSheet(theme.get_widget_style('paper_cell'))
+        self.container.setFrameShape(QFrame.NoFrame)
+        self.container.setCursor(QCursor(Qt.PointingHandCursor))
+        self._apply_style(selected=False)
+
         container_layout = QVBoxLayout(self.container)
-        container_layout.setContentsMargins(20, 15, 20, 15)  # More breathing room
-        container_layout.setSpacing(12)  # More space between elements
+        container_layout.setContentsMargins(16, 12, 16, 12)
+        container_layout.setSpacing(4)
 
-        # Header (always visible) - clickable to toggle
-        header_widget = QWidget()
-        header_widget.setCursor(QCursor(Qt.PointingHandCursor))
-        header_widget.mousePressEvent = lambda e: self.toggle_expanded()
-        header_layout = QHBoxLayout(header_widget)
-        header_layout.setContentsMargins(0, 0, 0, 0)
+        # Title — Source Serif 4 (display font)
+        self.title_label = QLabel(self.paper.title)
+        self.title_label.setFont(theme.get_display_font(size_pt=int(base_font_size * 1.18)))
+        self.title_label.setWordWrap(True)
+        self.title_label.setStyleSheet(f"""
+            color: {theme.get_color('text_primary')};
+            border: none; background: transparent;
+        """)
+        container_layout.addWidget(self.title_label)
 
-        # Expand/collapse arrow
-        self.arrow_label = QLabel("▶")  # Start collapsed
-        self.arrow_label.setFixedWidth(25)
-        arrow_font = QFont()
-        arrow_font.setPointSize(base_font_size)
-        self.arrow_label.setFont(arrow_font)
-        header_layout.addWidget(self.arrow_label)
-
-        # Title
-        title_label = QLabel(self.paper.title)
-        title_font = QFont()
-        title_font.setPointSize(int(base_font_size * 1.27))  # ~27% larger than base (14pt when base is 11pt)
-        title_font.setBold(True)
-        title_label.setFont(title_font)
-        title_label.setWordWrap(True)
-        title_label.setStyleSheet(
-            f"color: {theme.get_color('text_primary')}; "
-            f"line-height: 1.4; "
-            f"border: none; "
-            f"background: transparent;"
-        )
-        header_layout.addWidget(title_label, 1)
-
-        container_layout.addWidget(header_widget)
-
-        # Content (expandable)
-        self.content_widget = QWidget()
-        content_layout = QVBoxLayout(self.content_widget)
-        content_layout.setContentsMargins(25, 10, 0, 0)  # Indent and add top spacing
-        content_layout.setSpacing(12)  # More breathing room
-
-        # Authors
+        # Authors — DM Sans body
         authors_text = ", ".join([a.name for a in self.paper.authors])
-        if len(authors_text) > 200:
-            authors_text = authors_text[:200] + "..."
-        authors_label = QLabel(f"<b>Authors:</b> {authors_text}")
+        if len(authors_text) > 150:
+            authors_text = authors_text[:150] + "..."
+        authors_label = QLabel(authors_text)
         authors_label.setWordWrap(True)
-        authors_font = QFont()
-        authors_font.setPointSize(base_font_size)
-        authors_label.setFont(authors_font)
-        authors_label.setStyleSheet(
-            f"color: {theme.get_color('text_secondary')}; "
-            f"border: none; "
-            f"background: transparent;"
-        )
-        content_layout.addWidget(authors_label)
+        authors_label.setFont(theme.get_body_font(size_pt=int(base_font_size * 0.91)))
+        authors_label.setStyleSheet(f"""
+            color: {theme.get_color('text_secondary')};
+            border: none; background: transparent;
+        """)
+        container_layout.addWidget(authors_label)
 
-        # Metadata (arXiv ID, categories, date)
-        meta_text = f"<b>arXiv:</b> {self.paper.arxiv_id} | "
-        categories = ", ".join([c.code for c in self.paper.categories])
-        meta_text += f"<b>Categories:</b> {categories} | "
-        meta_text += f"<b>Date:</b> {self.paper.publication_date}"
-        meta_label = QLabel(meta_text)
-        meta_label.setWordWrap(True)
-        meta_font = QFont()
-        meta_font.setPointSize(int(base_font_size * 0.91))  # ~9% smaller than base (10pt when base is 11pt)
-        meta_label.setFont(meta_font)
-        meta_label.setStyleSheet(
-            f"color: {theme.get_color('text_secondary')}; "
-            f"border: none; "
-            f"background: transparent;"
-        )
-        content_layout.addWidget(meta_label)
+        # Metadata row — JetBrains Mono
+        meta_layout = QHBoxLayout()
+        meta_layout.setContentsMargins(0, 2, 0, 2)
+        meta_layout.setSpacing(12)
 
-        # Abstract (truncated with better length)
-        abstract_text = self.paper.abstract
-        if len(abstract_text) > 600:
-            abstract_text = abstract_text[:600] + "..."
-        abstract_label = QLabel(f"<b>Abstract:</b> {abstract_text}")
-        abstract_label.setWordWrap(True)
-        abstract_font = QFont()
-        abstract_font.setPointSize(base_font_size)
-        abstract_label.setFont(abstract_font)
-        abstract_label.setStyleSheet(
-            f"color: {theme.get_color('text_primary')}; "
-            f"line-height: 1.5; "
-            f"padding-top: 4px; "
-            f"border: none; "
-            f"background: transparent;"
-        )
-        content_layout.addWidget(abstract_label)
+        arxiv_label = QLabel(f"arXiv:{self.paper.arxiv_id}")
+        arxiv_label.setFont(theme.get_mono_font(size_pt=int(base_font_size * 0.82)))
+        arxiv_label.setStyleSheet(f"color: {theme.get_color('text_tertiary')}; border: none; background: transparent;")
+        meta_layout.addWidget(arxiv_label)
 
-        # Rating indicators (if rated) - spread across width with different colors
-        if self.paper.ratings and (self.paper.ratings.importance or
-                                   self.paper.ratings.comprehension or
-                                   self.paper.ratings.technicality):
-            ratings_layout = QHBoxLayout()
-            ratings_layout.setSpacing(20)
-            ratings_layout.setContentsMargins(0, 4, 0, 0)
+        if self.paper.categories:
+            primary_cat = self.paper.categories[0].code if self.paper.categories else ""
+            cat_label = QLabel(primary_cat)
+            cat_label.setFont(theme.get_mono_font(size_pt=int(base_font_size * 0.82)))
+            cat_label.setStyleSheet(f"""
+                color: {theme.get_color('primary')};
+                background: {theme.get_color('primary_light')};
+                padding: 0px 4px;
+                border-radius: 2px;
+                border: none;
+            """)
+            meta_layout.addWidget(cat_label)
 
-            rating_font = QFont()
-            rating_font.setPointSize(base_font_size)
+        date_label = QLabel(str(self.paper.publication_date))
+        date_label.setFont(theme.get_mono_font(size_pt=int(base_font_size * 0.82)))
+        date_label.setStyleSheet(f"color: {theme.get_color('text_tertiary')}; border: none; background: transparent;")
+        meta_layout.addWidget(date_label)
 
-            # Importance (primary color)
-            if self.paper.ratings.importance:
-                importance_label = QLabel(f"Importance: {self.paper.ratings.importance}")
-                importance_label.setFont(rating_font)
-                importance_label.setStyleSheet(
-                    f"color: {theme.get_color('primary')}; "
-                    f"border: none; background: transparent;"
-                )
-                ratings_layout.addWidget(importance_label)
+        meta_layout.addStretch()
+        container_layout.addLayout(meta_layout)
 
-            # Comprehension (success color)
-            if self.paper.ratings.comprehension:
-                comprehension_label = QLabel(f"Comprehension: {self.paper.ratings.comprehension}")
-                comprehension_label.setFont(rating_font)
-                comprehension_label.setStyleSheet(
-                    f"color: {theme.get_color('success')}; "
-                    f"border: none; background: transparent;"
-                )
-                ratings_layout.addWidget(comprehension_label)
-
-            # Technicality (warning color)
-            if self.paper.ratings.technicality:
-                technicality_label = QLabel(f"Technicality: {self.paper.ratings.technicality}")
-                technicality_label.setFont(rating_font)
-                technicality_label.setStyleSheet(
-                    f"color: {theme.get_color('warning')}; "
-                    f"border: none; background: transparent;"
-                )
-                ratings_layout.addWidget(technicality_label)
-
-            ratings_layout.addStretch()
-            content_layout.addLayout(ratings_layout)
-
-        # Action buttons
-        buttons_layout = QHBoxLayout()
-        buttons_layout.setSpacing(8)
-        buttons_layout.setContentsMargins(0, 8, 0, 0)  # Add top spacing
-
-        view_pdf_btn = QPushButton("View PDF")
-        view_pdf_btn.setFixedHeight(28)
-        view_pdf_btn.setMinimumWidth(100)
-        view_pdf_btn.setToolTip("Download or open this paper's PDF")
-        view_pdf_btn.clicked.connect(lambda: self.view_pdf_clicked.emit(self.paper.id))
-        view_pdf_btn.setStyleSheet(theme.get_widget_style('button_primary'))
-        buttons_layout.addWidget(view_pdf_btn)
-
-        self.rating_btn = QPushButton("Rate Paper")
-        self.rating_btn.setFixedHeight(28)
-        self.rating_btn.setMinimumWidth(100)
-        self.rating_btn.setToolTip("Rate this paper on importance, comprehension, and technicality")
-        self.rating_btn.clicked.connect(self._toggle_rating)
-        self.rating_btn.setStyleSheet(theme.get_widget_style('button_success'))
-        buttons_layout.addWidget(self.rating_btn)
-
-        # Push delete button to the right, separated from action buttons
-        buttons_layout.addStretch()
-
-        # Delete PDF button - only visible when paper has a local PDF
-        import os
-        if self.paper.local_pdf_path and os.path.exists(self.paper.local_pdf_path):
-            delete_pdf_btn = QPushButton("Delete PDF")
-            delete_pdf_btn.setFixedHeight(28)
-            delete_pdf_btn.setMinimumWidth(100)
-            delete_pdf_btn.setToolTip("Delete the locally saved PDF file")
-            delete_pdf_btn.clicked.connect(lambda: self.delete_pdf_clicked.emit(self.paper.id))
-            delete_pdf_btn.setStyleSheet(theme.get_widget_style('button_secondary'))
-            buttons_layout.addWidget(delete_pdf_btn)
-        content_layout.addLayout(buttons_layout)
-
-        # Inline rating widget (hidden by default)
-        self.rating_widget = RatingWidget()
-        self.rating_widget.setVisible(False)
-        self.rating_widget.rating_changed.connect(self._on_rating_changed)
-        # Load existing ratings
-        if self.paper.ratings:
-            self.rating_widget.set_ratings(
-                self.paper.ratings.importance,
-                self.paper.ratings.comprehension,
-                self.paper.ratings.technicality
-            )
-        content_layout.addWidget(self.rating_widget)
-
-        # Inline note editor - commented out per user request
-        # self.note_editor = NoteEditorWidget()
-        # self.note_editor.setVisible(False)
-        # self.note_editor.note_changed.connect(self._on_note_changed)
-        # # Load existing note
-        # if self.paper.notes and self.paper.notes.note_text:
-        #     self.note_editor.set_note(self.paper.notes.note_text)
-        # content_layout.addWidget(self.note_editor)
-
-        container_layout.addWidget(self.content_widget)
+        # Abstract preview — 2 lines, DM Sans
+        if self.paper.abstract:
+            abstract_text = self.paper.abstract
+            if len(abstract_text) > 200:
+                abstract_text = abstract_text[:200] + "..."
+            abstract_label = QLabel(abstract_text)
+            abstract_label.setWordWrap(True)
+            abstract_label.setMaximumHeight(int(base_font_size * 3.5))
+            abstract_label.setFont(theme.get_body_font(size_pt=int(base_font_size * 0.91)))
+            abstract_label.setStyleSheet(f"""
+                color: {theme.get_color('text_secondary')};
+                border: none; background: transparent;
+            """)
+            container_layout.addWidget(abstract_label)
 
         main_layout.addWidget(self.container)
 
-        # Set initial state
-        self.content_widget.setVisible(self.is_expanded)
-
-    def toggle_expanded(self):
-        """Toggle expanded/collapsed state."""
-        self.is_expanded = not self.is_expanded
-
-        if self.is_expanded:
-            self.arrow_label.setText("▼")
-            self.content_widget.setVisible(True)
+    def _apply_style(self, selected: bool = False):
+        theme = get_theme_manager()
+        if selected:
+            self.container.setStyleSheet(f"""
+                QFrame {{
+                    border: none;
+                    border-bottom: 1px solid {theme.get_color('border')};
+                    border-left: 3px solid {theme.get_color('primary')};
+                    background-color: {theme.get_color('surface_hover')};
+                    border-radius: 0px;
+                }}
+                QFrame QWidget {{ background-color: transparent; border: none; }}
+                QFrame QLabel {{ background-color: transparent; border: none; }}
+            """)
         else:
-            self.arrow_label.setText("▶")
-            self.content_widget.setVisible(False)
+            self.container.setStyleSheet(f"""
+                QFrame {{
+                    border: none;
+                    border-bottom: 1px solid {theme.get_color('border')};
+                    border-left: 3px solid transparent;
+                    background-color: {theme.get_color('surface')};
+                    border-radius: 0px;
+                }}
+                QFrame:hover {{
+                    border-left: 3px solid {theme.get_color('primary')};
+                    background-color: {theme.get_color('surface_hover')};
+                }}
+                QFrame QWidget {{ background-color: transparent; border: none; }}
+                QFrame QLabel {{ background-color: transparent; border: none; }}
+            """)
 
-    def set_expanded(self, expanded: bool):
-        """Set expanded state."""
-        if self.is_expanded != expanded:
-            self.toggle_expanded()
+    def set_selected(self, selected: bool):
+        self.is_selected = selected
+        self._apply_style(selected)
 
-    def _toggle_rating(self):
-        """Toggle rating widget visibility."""
-        self.rating_visible = not self.rating_visible
-        self.rating_widget.setVisible(self.rating_visible)
-
-        # Update button text (no emojis per user preference)
-        if self.rating_visible:
-            self.rating_btn.setText("Hide Rating")
-        else:
-            self.rating_btn.setText("Rate Paper")
-
-    # def _toggle_notes(self):
-    #     """Toggle notes editor visibility."""
-    #     self.notes_visible = not self.notes_visible
-    #     self.note_editor.setVisible(self.notes_visible)
-    #
-    #     # Update button text
-    #     if self.notes_visible:
-    #         self.notes_btn.setText("✏️ Hide Notes")
-    #     else:
-    #         self.notes_btn.setText("✏️ Add/Edit Notes")
-
-    def _on_rating_changed(self, importance: str, comprehension: str, technicality: str):
-        """Handle rating change."""
-        self.rating_changed.emit(self.paper.id, importance, comprehension, technicality)
-
-    def _on_note_changed(self, note_text: str):
-        """Handle note change."""
-        self.note_changed.emit(self.paper.id, note_text)
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit(self.paper)
+        super().mousePressEvent(event)
