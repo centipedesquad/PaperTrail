@@ -1,5 +1,5 @@
 #!/bin/bash
-# Launcher script for myArXiv application
+# Launcher script for PaperTrail application
 
 cd "$(dirname "$0")"
 source .venv/bin/activate

@@ -1,10 +1,12 @@
 """
-Database connection management for myArXiv.
+Database connection management for PaperTrail.
 Uses SQLite with WAL mode for better concurrency.
 """
 
 import sqlite3
 import os
+import shutil
+import threading
 from pathlib import Path
 from contextlib import contextmanager
 from typing import Optional
@@ -25,6 +27,7 @@ class DatabaseConnection:
         """
         self.db_path = db_path
         self._connection: Optional[sqlite3.Connection] = None
+        self._lock = threading.RLock()
 
         # Ensure parent directory exists
         db_dir = os.path.dirname(db_path)
@@ -45,6 +48,11 @@ class DatabaseConnection:
                 timeout=30.0  # 30 second timeout for locks
             )
 
+            # Run integrity check on existing databases
+            if os.path.getsize(self.db_path) > 0:
+                if not self._check_integrity():
+                    self._handle_corrupt_database()
+
             # Enable foreign keys
             self._connection.execute("PRAGMA foreign_keys = ON")
 
@@ -60,6 +68,50 @@ class DatabaseConnection:
             logger.info(f"Connected to database at {self.db_path}")
 
         return self._connection
+
+    def _check_integrity(self) -> bool:
+        """Run PRAGMA integrity_check on the database.
+
+        Returns:
+            True if database is healthy, False if corrupt.
+        """
+        try:
+            result = self._connection.execute("PRAGMA integrity_check").fetchone()
+            if result and result[0] == 'ok':
+                return True
+            logger.error(f"Database integrity check failed: {result}")
+            return False
+        except Exception as e:
+            logger.error(f"Database integrity check error: {e}")
+            return False
+
+    def _handle_corrupt_database(self):
+        """Back up the corrupt database and create a fresh connection."""
+        backup_path = self.db_path + '.corrupt'
+        logger.warning(
+            f"Database is corrupt. Backing up to {backup_path} and creating fresh database."
+        )
+        # Close the connection to the corrupt file
+        if self._connection:
+            try:
+                self._connection.close()
+            except Exception:
+                pass
+            self._connection = None
+
+        # Back up corrupt file
+        try:
+            shutil.copy2(self.db_path, backup_path)
+            os.remove(self.db_path)
+        except OSError as e:
+            logger.error(f"Failed to back up corrupt database: {e}")
+
+        # Reconnect to a fresh database
+        self._connection = sqlite3.connect(
+            self.db_path,
+            check_same_thread=False,
+            timeout=30.0
+        )
 
     def close(self):
         """Close database connection."""
@@ -79,8 +131,9 @@ class DatabaseConnection:
         Returns:
             Cursor object
         """
-        conn = self.connect()
-        return conn.execute(query, params)
+        with self._lock:
+            conn = self.connect()
+            return conn.execute(query, params)
 
     def executemany(self, query: str, params_list: list) -> sqlite3.Cursor:
         """
@@ -93,8 +146,9 @@ class DatabaseConnection:
         Returns:
             Cursor object
         """
-        conn = self.connect()
-        return conn.executemany(query, params_list)
+        with self._lock:
+            conn = self.connect()
+            return conn.executemany(query, params_list)
 
     def fetch_one(self, query: str, params: tuple = ()) -> Optional[sqlite3.Row]:
         """
@@ -107,8 +161,10 @@ class DatabaseConnection:
         Returns:
             Single row or None
         """
-        cursor = self.execute(query, params)
-        return cursor.fetchone()
+        with self._lock:
+            conn = self.connect()
+            cursor = conn.execute(query, params)
+            return cursor.fetchone()
 
     def fetch_all(self, query: str, params: tuple = ()) -> list:
         """
@@ -121,29 +177,36 @@ class DatabaseConnection:
         Returns:
             List of rows
         """
-        cursor = self.execute(query, params)
-        return cursor.fetchall()
+        with self._lock:
+            conn = self.connect()
+            cursor = conn.execute(query, params)
+            return cursor.fetchall()
 
     def commit(self):
         """Commit current transaction."""
-        if self._connection:
-            self._connection.commit()
+        with self._lock:
+            if self._connection:
+                self._connection.commit()
 
     def rollback(self):
         """Rollback current transaction."""
-        if self._connection:
-            self._connection.rollback()
+        with self._lock:
+            if self._connection:
+                self._connection.rollback()
 
     @contextmanager
     def transaction(self):
         """
         Context manager for transactions.
+        Thread-safe: holds the lock for the entire transaction to prevent
+        interleaving of operations from different threads.
 
         Usage:
             with db.transaction():
                 db.execute("INSERT ...")
                 db.execute("UPDATE ...")
         """
+        self._lock.acquire()
         conn = self.connect()
         try:
             yield conn
@@ -152,6 +215,8 @@ class DatabaseConnection:
             conn.rollback()
             logger.error(f"Transaction failed: {e}")
             raise
+        finally:
+            self._lock.release()
 
     def vacuum(self):
         """

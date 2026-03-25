@@ -1,5 +1,5 @@
 """
-Platform-specific utilities for myArXiv.
+Platform-specific utilities for PaperTrail.
 Handles differences between macOS and Linux.
 """
 
@@ -38,11 +38,11 @@ def get_default_data_dir() -> str:
     home = Path.home()
 
     if system == 'macos':
-        return str(home / "Library" / "Application Support" / "myArXiv")
+        return str(home / "Library" / "Application Support" / "PaperTrail")
     elif system == 'linux':
-        return str(home / ".local" / "share" / "myArXiv")
+        return str(home / ".local" / "share" / "PaperTrail")
     else:  # windows
-        return str(home / "AppData" / "Local" / "myArXiv")
+        return str(home / "AppData" / "Local" / "PaperTrail")
 
 
 def get_default_pdf_reader() -> Optional[str]:

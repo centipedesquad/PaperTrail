@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
+from ui.theme import get_theme_manager
 
 logger = logging.getLogger(__name__)
 
@@ -39,17 +40,15 @@ class PDFActionDialog(QDialog):
         layout = QVBoxLayout(self)
 
         # Title
+        theme = get_theme_manager()
+
         title_label = QLabel("PDF not downloaded yet")
-        title_font = QFont()
-        title_font.setPointSize(14)
-        title_font.setBold(True)
+        title_font = theme.get_display_font(size_pt=14)
         title_label.setFont(title_font)
         layout.addWidget(title_label)
-
-        # Paper info
         paper_label = QLabel(f"Paper: {paper_title}")
         paper_label.setWordWrap(True)
-        paper_label.setStyleSheet("color: #666; margin-bottom: 10px;")
+        paper_label.setStyleSheet(f"color: {theme.get_color('text_secondary')}; margin-bottom: 10px;")
         layout.addWidget(paper_label)
 
         # Explanation
@@ -70,9 +69,7 @@ class PDFActionDialog(QDialog):
 
         download_layout = QVBoxLayout()
         download_title = QLabel("Download & Keep")
-        download_title_font = QFont()
-        download_title_font.setBold(True)
-        download_title.setFont(download_title_font)
+        download_title.setFont(theme.get_display_font(bold=True))
         download_layout.addWidget(download_title)
 
         download_desc = QLabel(
@@ -81,7 +78,7 @@ class PDFActionDialog(QDialog):
             "• Opens faster on subsequent views\n"
             "• Recommended for papers you'll reference often"
         )
-        download_desc.setStyleSheet("color: #555; margin-left: 20px;")
+        download_desc.setStyleSheet(f"color: {theme.get_color('text_secondary')}; margin-left: 20px;")
         download_layout.addWidget(download_desc)
 
         download_widget = QVBoxLayout()
@@ -97,9 +94,7 @@ class PDFActionDialog(QDialog):
 
         stream_layout = QVBoxLayout()
         stream_title = QLabel("Stream (Temporary)")
-        stream_title_font = QFont()
-        stream_title_font.setBold(True)
-        stream_title.setFont(stream_title_font)
+        stream_title.setFont(theme.get_display_font(bold=True))
         stream_layout.addWidget(stream_title)
 
         stream_desc = QLabel(
@@ -108,7 +103,7 @@ class PDFActionDialog(QDialog):
             "• Saves disk space\n"
             "• Good for quick previews"
         )
-        stream_desc.setStyleSheet("color: #555; margin-left: 20px;")
+        stream_desc.setStyleSheet(f"color: {theme.get_color('text_secondary')}; margin-left: 20px;")
         stream_layout.addWidget(stream_desc)
 
         stream_widget = QVBoxLayout()
@@ -120,7 +115,7 @@ class PDFActionDialog(QDialog):
 
         # Remember choice checkbox
         self.remember_checkbox = QCheckBox("Remember my choice and don't ask again")
-        self.remember_checkbox.setStyleSheet("font-style: italic; color: #666;")
+        self.remember_checkbox.setStyleSheet(f"font-style: italic; color: {theme.get_color('text_secondary')};")
         layout.addWidget(self.remember_checkbox)
 
         layout.addSpacing(10)
@@ -132,19 +127,7 @@ class PDFActionDialog(QDialog):
         proceed_button = QPushButton("Proceed")
         proceed_button.clicked.connect(self._on_proceed)
         proceed_button.setDefault(True)
-        proceed_button.setStyleSheet("""
-            QPushButton {
-                background-color: #4a90e2;
-                color: white;
-                padding: 8px 20px;
-                border: none;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #357abd;
-            }
-        """)
+        proceed_button.setStyleSheet(theme.get_widget_style('button_primary'))
         buttons_layout.addWidget(proceed_button)
 
         cancel_button = QPushButton("Cancel")

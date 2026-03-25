@@ -1,0 +1,95 @@
+#!/bin/sh
+# .githooks/pre-commit
+#
+# Enforces GIT_WORKFLOW.md rules at commit time:
+# - All branches: block secrets files and hardcoded credentials
+# - main branch: block dev-only files and build artifacts
+
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+STAGED=$(git diff --cached --name-only --diff-filter=ACM)
+
+if [ -z "$STAGED" ]; then
+    exit 0
+fi
+
+BLOCKED=false
+
+# --- All branches: block secrets files ---
+for f in $STAGED; do
+    case "$f" in
+        .env|.env.*)
+            echo "BLOCKED: '$f' is a secrets file and should not be committed."
+            BLOCKED=true
+            ;;
+        *credentials*|*secret*)
+            echo "BLOCKED: '$f' looks like a secrets file."
+            BLOCKED=true
+            ;;
+    esac
+done
+
+# Scan staged diff for hardcoded secrets
+if git diff --cached -U0 --diff-filter=ACM -- '*.py' '*.sh' '*.json' '*.yaml' '*.yml' '*.toml' | \
+   grep -qiE '(API_KEY|SECRET_KEY|PASSWORD|PRIVATE_KEY)\s*=\s*.+'; then
+    echo "BLOCKED: Staged changes may contain hardcoded secrets (API_KEY, SECRET_KEY, PASSWORD, or PRIVATE_KEY)."
+    echo "  Review your diff with: git diff --cached"
+    BLOCKED=true
+fi
+
+# --- main branch: block dev-only files and artifacts ---
+if [ "$BRANCH" = "main" ]; then
+    FORBIDDEN_FILES="test_phase2.py setup.py DEPLOYMENT.md IMPLEMENTATION.md"
+    FORBIDDEN_DIRS="dist/ build/ data/"
+
+    for f in $STAGED; do
+        basename=$(basename "$f")
+
+        # Check forbidden files
+        for pat in $FORBIDDEN_FILES; do
+            if [ "$basename" = "$pat" ]; then
+                echo "BLOCKED: '$f' should not be committed to main (dev-only file)."
+                echo "  See GIT_WORKFLOW.md for what belongs on each branch."
+                BLOCKED=true
+            fi
+        done
+
+        # Check forbidden directories
+        for dir in $FORBIDDEN_DIRS; do
+            case "$f" in
+                ${dir}*)
+                    echo "BLOCKED: '$f' is a build/runtime artifact and should not be on main."
+                    BLOCKED=true
+                    ;;
+            esac
+        done
+
+        # Check log files
+        case "$f" in
+            *.log)
+                echo "BLOCKED: Log file '$f' should not be committed."
+                BLOCKED=true
+                ;;
+        esac
+    done
+
+    # Require CHANGELOG.md to be staged on main
+    HAS_CHANGELOG=false
+    for f in $STAGED; do
+        if [ "$f" = "CHANGELOG.md" ]; then
+            HAS_CHANGELOG=true
+        fi
+    done
+    if [ "$HAS_CHANGELOG" = false ]; then
+        echo "BLOCKED: Commits to main must include an updated CHANGELOG.md."
+        echo "  Add release notes to CHANGELOG.md and stage it."
+        BLOCKED=true
+    fi
+fi
+
+if [ "$BLOCKED" = true ]; then
+    echo ""
+    echo "Commit aborted. Fix the issues above or bypass with: git commit --no-verify"
+    exit 1
+fi
+
+exit 0

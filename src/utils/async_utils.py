@@ -1,5 +1,5 @@
 """
-Asynchronous utilities for myArXiv.
+Asynchronous utilities for PaperTrail.
 QThread workers for non-blocking operations.
 """
 
@@ -15,7 +15,7 @@ class FetchWorker(QThread):
 
     # Signals
     progress = Signal(int, str)  # (percentage, status_message)
-    finished = Signal(list)  # List of papers
+    finished = Signal(object)  # Result dict from fetch service
     error = Signal(str)  # Error message
 
     def __init__(self, fetch_func: Callable, *args, **kwargs):
@@ -23,7 +23,7 @@ class FetchWorker(QThread):
         Initialize fetch worker.
 
         Args:
-            fetch_func: Function to call for fetching (should return list of papers)
+            fetch_func: Function to call for fetching (returns result dict)
             *args, **kwargs: Arguments to pass to fetch_func
         """
         super().__init__()
@@ -37,15 +37,16 @@ class FetchWorker(QThread):
         try:
             self.progress.emit(0, "Starting fetch...")
 
-            # Call fetch function
-            papers = self.fetch_func(*self.args, **self.kwargs)
+            # Call fetch function — returns dict with 'fetched', 'created', 'duplicates', 'papers'
+            result = self.fetch_func(*self.args, **self.kwargs)
 
             if self._is_cancelled:
                 self.progress.emit(100, "Cancelled")
                 return
 
-            self.progress.emit(100, f"Fetched {len(papers)} papers")
-            self.finished.emit(papers)
+            fetched_count = result.get('fetched', 0) if isinstance(result, dict) else len(result)
+            self.progress.emit(100, f"Fetched {fetched_count} papers")
+            self.finished.emit(result)
 
         except Exception as e:
             logger.error(f"Fetch worker error: {e}")

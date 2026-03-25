@@ -1,211 +1,171 @@
 """
-Collapsible paper cell widget.
-Displays paper information in an expandable card.
+Paper cell widget.
+Displays paper information as a compact card in the feed.
+Click to select — details shown in the context panel.
 """
 
 import logging
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QFrame, QSizePolicy
+    QFrame, QSizePolicy, QApplication
 )
-from PySide6.QtCore import Qt, Signal, QPropertyAnimation, QEasingCurve
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QCursor
 from models import Paper
+from ui.theme import get_theme_manager
 
 logger = logging.getLogger(__name__)
 
 
 class PaperCellWidget(QWidget):
-    """Collapsible widget for displaying paper information."""
+    """Compact paper card for the feed. Click to select."""
 
     # Signals
-    view_pdf_clicked = Signal(int)  # paper_id
-    add_note_clicked = Signal(int)  # paper_id
-    rate_paper_clicked = Signal(int)  # paper_id
+    clicked = Signal(object)  # Paper object
 
     def __init__(self, paper: Paper, parent=None):
-        """
-        Initialize paper cell widget.
-
-        Args:
-            paper: Paper object to display
-            parent: Parent widget
-        """
         super().__init__(parent)
         self.paper = paper
-        self.is_expanded = True  # Start expanded
-
+        self.is_selected = False
+        self.abstract_label = None
+        self._base_font_size = QApplication.instance().font().pointSize() or 11
         self._setup_ui()
 
     def _setup_ui(self):
-        """Setup UI components."""
-        # Main layout
+        theme = get_theme_manager()
+        base_font_size = QApplication.instance().font().pointSize() or 11
+
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # Container frame with border
+        # Container frame with left-border accent on hover
         self.container = QFrame()
-        self.container.setFrameShape(QFrame.Box)
-        self.container.setStyleSheet("""
-            QFrame {
-                border: 1px solid #ddd;
-                border-radius: 5px;
-                background-color: white;
-            }
-            QFrame:hover {
-                border-color: #4a90e2;
-            }
-        """)
+        self.container.setFrameShape(QFrame.NoFrame)
+        self.container.setCursor(QCursor(Qt.PointingHandCursor))
+        self._apply_style(selected=False)
+
         container_layout = QVBoxLayout(self.container)
-        container_layout.setContentsMargins(15, 10, 15, 10)
-        container_layout.setSpacing(10)
+        container_layout.setContentsMargins(16, 12, 16, 12)
+        container_layout.setSpacing(4)
 
-        # Header (always visible) - clickable to toggle
-        header_widget = QWidget()
-        header_widget.setCursor(QCursor(Qt.PointingHandCursor))
-        header_widget.mousePressEvent = lambda e: self.toggle_expanded()
-        header_layout = QHBoxLayout(header_widget)
-        header_layout.setContentsMargins(0, 0, 0, 0)
+        # Title — Source Serif 4 (display font)
+        self.title_label = QLabel(self.paper.title)
+        self.title_label.setFont(theme.get_display_font(size_pt=int(base_font_size * 1.18)))
+        self.title_label.setWordWrap(True)
+        self.title_label.setStyleSheet(f"""
+            color: {theme.get_color('text_primary')};
+            border: none; background: transparent;
+        """)
+        container_layout.addWidget(self.title_label)
 
-        # Expand/collapse arrow
-        self.arrow_label = QLabel("▼")
-        self.arrow_label.setFixedWidth(20)
-        header_layout.addWidget(self.arrow_label)
-
-        # Title
-        title_label = QLabel(self.paper.title)
-        title_font = QFont()
-        title_font.setPointSize(12)
-        title_font.setBold(True)
-        title_label.setFont(title_font)
-        title_label.setWordWrap(True)
-        title_label.setStyleSheet("color: #2c3e50;")
-        header_layout.addWidget(title_label, 1)
-
-        container_layout.addWidget(header_widget)
-
-        # Content (expandable)
-        self.content_widget = QWidget()
-        content_layout = QVBoxLayout(self.content_widget)
-        content_layout.setContentsMargins(20, 0, 0, 0)
-        content_layout.setSpacing(8)
-
-        # Authors
+        # Authors — DM Sans body
         authors_text = ", ".join([a.name for a in self.paper.authors])
         if len(authors_text) > 150:
             authors_text = authors_text[:150] + "..."
-        authors_label = QLabel(f"<b>Authors:</b> {authors_text}")
+        authors_label = QLabel(authors_text)
         authors_label.setWordWrap(True)
-        authors_label.setStyleSheet("color: #555;")
-        content_layout.addWidget(authors_label)
-
-        # Metadata (arXiv ID, categories, date)
-        meta_text = f"<b>arXiv:</b> {self.paper.arxiv_id} | "
-        categories = ", ".join([c.code for c in self.paper.categories])
-        meta_text += f"<b>Categories:</b> {categories} | "
-        meta_text += f"<b>Date:</b> {self.paper.publication_date}"
-        meta_label = QLabel(meta_text)
-        meta_label.setWordWrap(True)
-        meta_label.setStyleSheet("color: #666; font-size: 10pt;")
-        content_layout.addWidget(meta_label)
-
-        # Abstract (truncated)
-        abstract_text = self.paper.abstract
-        if len(abstract_text) > 500:
-            abstract_text = abstract_text[:500] + "..."
-        abstract_label = QLabel(f"<b>Abstract:</b> {abstract_text}")
-        abstract_label.setWordWrap(True)
-        abstract_label.setStyleSheet("color: #444; font-size: 10pt;")
-        content_layout.addWidget(abstract_label)
-
-        # Rating indicators (if rated)
-        if self.paper.ratings:
-            rating_text = "<b>Ratings:</b> "
-            if self.paper.ratings.importance:
-                rating_text += f"Importance: {self.paper.ratings.importance} | "
-            if self.paper.ratings.comprehension:
-                rating_text += f"Comprehension: {self.paper.ratings.comprehension} | "
-            if self.paper.ratings.technicality:
-                rating_text += f"Technicality: {self.paper.ratings.technicality}"
-            rating_label = QLabel(rating_text)
-            rating_label.setStyleSheet("color: #27ae60; font-size: 10pt;")
-            content_layout.addWidget(rating_label)
-
-        # Action buttons
-        buttons_layout = QHBoxLayout()
-        buttons_layout.setSpacing(10)
-
-        view_pdf_btn = QPushButton("View PDF")
-        view_pdf_btn.clicked.connect(lambda: self.view_pdf_clicked.emit(self.paper.id))
-        view_pdf_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4a90e2;
-                color: white;
-                border: none;
-                padding: 5px 15px;
-                border-radius: 3px;
-            }
-            QPushButton:hover {
-                background-color: #357abd;
-            }
+        authors_label.setFont(theme.get_body_font(size_pt=int(base_font_size * 0.91)))
+        authors_label.setStyleSheet(f"""
+            color: {theme.get_color('text_secondary')};
+            border: none; background: transparent;
         """)
-        buttons_layout.addWidget(view_pdf_btn)
+        container_layout.addWidget(authors_label)
 
-        add_note_btn = QPushButton("Add/Edit Notes")
-        add_note_btn.clicked.connect(lambda: self.add_note_clicked.emit(self.paper.id))
-        add_note_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #95a5a6;
-                color: white;
+        # Metadata row — JetBrains Mono
+        meta_layout = QHBoxLayout()
+        meta_layout.setContentsMargins(0, 2, 0, 2)
+        meta_layout.setSpacing(12)
+
+        arxiv_label = QLabel(f"arXiv:{self.paper.arxiv_id}")
+        arxiv_label.setFont(theme.get_mono_font(size_pt=int(base_font_size * 0.82)))
+        arxiv_label.setStyleSheet(f"color: {theme.get_color('text_tertiary')}; border: none; background: transparent;")
+        meta_layout.addWidget(arxiv_label)
+
+        if self.paper.categories:
+            primary_cat = self.paper.categories[0].code if self.paper.categories else ""
+            cat_label = QLabel(primary_cat)
+            cat_label.setFont(theme.get_mono_font(size_pt=int(base_font_size * 0.82)))
+            cat_label.setStyleSheet(f"""
+                color: {theme.get_color('primary')};
+                background: {theme.get_color('primary_light')};
+                padding: 0px 4px;
+                border-radius: 2px;
                 border: none;
-                padding: 5px 15px;
-                border-radius: 3px;
-            }
-            QPushButton:hover {
-                background-color: #7f8c8d;
-            }
-        """)
-        buttons_layout.addWidget(add_note_btn)
+            """)
+            meta_layout.addWidget(cat_label)
 
-        rate_paper_btn = QPushButton("Rate Paper")
-        rate_paper_btn.clicked.connect(lambda: self.rate_paper_clicked.emit(self.paper.id))
-        rate_paper_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #27ae60;
-                color: white;
-                border: none;
-                padding: 5px 15px;
-                border-radius: 3px;
-            }
-            QPushButton:hover {
-                background-color: #229954;
-            }
-        """)
-        buttons_layout.addWidget(rate_paper_btn)
+        date_label = QLabel(str(self.paper.publication_date))
+        date_label.setFont(theme.get_mono_font(size_pt=int(base_font_size * 0.82)))
+        date_label.setStyleSheet(f"color: {theme.get_color('text_tertiary')}; border: none; background: transparent;")
+        meta_layout.addWidget(date_label)
 
-        buttons_layout.addStretch()
-        content_layout.addLayout(buttons_layout)
+        meta_layout.addStretch()
+        container_layout.addLayout(meta_layout)
 
-        container_layout.addWidget(self.content_widget)
+        # Abstract — truncated when collapsed, full when selected
+        if self.paper.abstract:
+            abstract_text = self.paper.abstract
+            if len(abstract_text) > 200:
+                abstract_text = abstract_text[:200] + "..."
+            self.abstract_label = QLabel(abstract_text)
+            self.abstract_label.setWordWrap(True)
+            self.abstract_label.setMaximumHeight(int(base_font_size * 3.5))
+            self.abstract_label.setFont(theme.get_body_font(size_pt=int(base_font_size * 0.91)))
+            self.abstract_label.setStyleSheet(f"""
+                color: {theme.get_color('text_secondary')};
+                border: none; background: transparent;
+            """)
+            container_layout.addWidget(self.abstract_label)
 
         main_layout.addWidget(self.container)
 
-        # Set initial state
-        self.content_widget.setVisible(self.is_expanded)
-
-    def toggle_expanded(self):
-        """Toggle expanded/collapsed state."""
-        self.is_expanded = not self.is_expanded
-
-        if self.is_expanded:
-            self.arrow_label.setText("▼")
-            self.content_widget.setVisible(True)
+    def _apply_style(self, selected: bool = False):
+        theme = get_theme_manager()
+        if selected:
+            self.container.setStyleSheet(f"""
+                QFrame {{
+                    border: none;
+                    border-bottom: 1px solid {theme.get_color('border')};
+                    border-left: 3px solid {theme.get_color('primary')};
+                    background-color: {theme.get_color('surface_hover')};
+                    border-radius: 0px;
+                }}
+                QFrame QWidget {{ background-color: transparent; border: none; }}
+                QFrame QLabel {{ background-color: transparent; border: none; }}
+            """)
         else:
-            self.arrow_label.setText("▶")
-            self.content_widget.setVisible(False)
+            self.container.setStyleSheet(f"""
+                QFrame {{
+                    border: none;
+                    border-bottom: 1px solid {theme.get_color('border')};
+                    border-left: 3px solid transparent;
+                    background-color: {theme.get_color('surface')};
+                    border-radius: 0px;
+                }}
+                QFrame:hover {{
+                    border-left: 3px solid {theme.get_color('primary')};
+                    background-color: {theme.get_color('surface_hover')};
+                }}
+                QFrame QWidget {{ background-color: transparent; border: none; }}
+                QFrame QLabel {{ background-color: transparent; border: none; }}
+            """)
 
-    def set_expanded(self, expanded: bool):
-        """Set expanded state."""
-        if self.is_expanded != expanded:
-            self.toggle_expanded()
+    def set_selected(self, selected: bool):
+        self.is_selected = selected
+        self._apply_style(selected)
+        if self.abstract_label and self.paper.abstract:
+            if selected:
+                self.abstract_label.setMaximumHeight(16777215)  # QWIDGETSIZE_MAX
+                self.abstract_label.setText(self.paper.abstract)
+            else:
+                text = self.paper.abstract
+                if len(text) > 200:
+                    text = text[:200] + "..."
+                self.abstract_label.setText(text)
+                self.abstract_label.setMaximumHeight(int(self._base_font_size * 3.5))
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit(self.paper)
+        super().mousePressEvent(event)

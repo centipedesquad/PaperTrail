@@ -1,130 +1,189 @@
 """
 Paper feed widget.
-Scrollable container for paper cells.
+Scrollable list of paper cards with search bar and feed header.
 """
 
 import logging
 from typing import List
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QScrollArea, QLabel
+    QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QLabel,
+    QLineEdit, QComboBox, QApplication
 )
 from PySide6.QtCore import Qt, Signal
 from models import Paper
 from ui.widgets.paper_cell_widget import PaperCellWidget
+from ui.theme import get_theme_manager
 
 logger = logging.getLogger(__name__)
 
 
 class PaperFeedWidget(QWidget):
-    """Scrollable feed of paper cells."""
+    """Paper feed with search bar, header, and selectable paper cards."""
 
     # Signals
-    view_pdf_requested = Signal(int)  # paper_id
-    add_note_requested = Signal(int)  # paper_id
-    rate_paper_requested = Signal(int)  # paper_id
+    paper_selected = Signal(object)  # Paper object
+    search_requested = Signal(str)   # search text
+    sort_changed = Signal(str)       # sort key
 
     def __init__(self, parent=None):
-        """
-        Initialize paper feed widget.
-
-        Args:
-            parent: Parent widget
-        """
         super().__init__(parent)
         self.paper_cells = []
+        self.selected_cell = None
+        self._current_filter_label = "All Papers"
         self._setup_ui()
 
     def _setup_ui(self):
-        """Setup UI components."""
-        # Main layout
+        theme = get_theme_manager()
+        base_font_size = QApplication.instance().font().pointSize() or 11
+
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        # Scroll area
+        # --- Feed header ---
+        header_widget = QWidget()
+        header_widget.setStyleSheet(f"""
+            background-color: {theme.get_color('background')};
+            border-bottom: 1px solid {theme.get_color('border')};
+        """)
+        header_layout = QVBoxLayout(header_widget)
+        header_layout.setContentsMargins(20, 16, 20, 12)
+        header_layout.setSpacing(12)
+
+        # Title row
+        title_row = QHBoxLayout()
+        self.feed_title = QLabel("All Papers")
+        self.feed_title.setFont(theme.get_display_font(size_pt=int(base_font_size * 1.6)))
+        self.feed_title.setStyleSheet(f"color: {theme.get_color('text_primary')}; border: none;")
+        title_row.addWidget(self.feed_title)
+
+        self.feed_meta = QLabel("")
+        self.feed_meta.setFont(theme.get_mono_font(size_pt=int(base_font_size * 0.82)))
+        self.feed_meta.setStyleSheet(f"color: {theme.get_color('text_tertiary')}; border: none;")
+        title_row.addWidget(self.feed_meta)
+        title_row.addStretch()
+
+        header_layout.addLayout(title_row)
+
+        # Search + sort row
+        search_row = QHBoxLayout()
+        search_row.setSpacing(8)
+
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Search titles, authors, abstracts...")
+        self.search_input.returnPressed.connect(self._on_search)
+        self.search_input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {theme.get_color('surface')};
+                border: 1px solid {theme.get_color('border')};
+                border-radius: 2px;
+                padding: 8px 12px;
+                color: {theme.get_color('text_primary')};
+            }}
+            QLineEdit:focus {{
+                border-color: {theme.get_color('primary')};
+            }}
+        """)
+        search_row.addWidget(self.search_input, 1)
+
+        self.sort_combo = QComboBox()
+        self.sort_combo.addItem("Newest", "date_desc")
+        self.sort_combo.addItem("Oldest", "date_asc")
+        self.sort_combo.addItem("Title A-Z", "title_asc")
+        self.sort_combo.addItem("Title Z-A", "title_desc")
+        self.sort_combo.currentIndexChanged.connect(self._on_sort_changed)
+        search_row.addWidget(self.sort_combo)
+
+        header_layout.addLayout(search_row)
+
+        main_layout.addWidget(header_widget)
+
+        # --- Scroll area for paper cards ---
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QScrollArea.NoFrame)
         scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        # Container widget for paper cells
         self.container_widget = QWidget()
         self.container_layout = QVBoxLayout(self.container_widget)
-        self.container_layout.setContentsMargins(10, 10, 10, 10)
-        self.container_layout.setSpacing(10)
+        self.container_layout.setContentsMargins(16, 0, 16, 16)
+        self.container_layout.setSpacing(0)
         self.container_layout.setAlignment(Qt.AlignTop)
 
-        # Empty state label
+        # Empty state
         self.empty_label = QLabel("No papers to display.\n\nClick 'Fetch Papers' to get started.")
         self.empty_label.setAlignment(Qt.AlignCenter)
-        self.empty_label.setStyleSheet("""
-            QLabel {
-                color: #999;
+        self.empty_label.setStyleSheet(f"""
+            QLabel {{
+                color: {theme.get_color('text_tertiary')};
                 font-size: 14pt;
                 padding: 50px;
-            }
+            }}
         """)
         self.container_layout.addWidget(self.empty_label)
 
         scroll_area.setWidget(self.container_widget)
         main_layout.addWidget(scroll_area)
 
-    def set_papers(self, papers: List[Paper]):
-        """
-        Set papers to display.
+    def set_feed_title(self, title: str):
+        """Set the feed header title (e.g., 'All Papers', 'cs.LG')."""
+        self._current_filter_label = title
+        self.feed_title.setText(title)
 
-        Args:
-            papers: List of Paper objects
-        """
-        # Clear existing cells
+    def set_papers(self, papers: List[Paper]):
+        """Display papers in the feed."""
         self.clear_papers()
 
         if not papers:
             self.empty_label.setVisible(True)
+            self.feed_meta.setText("")
             return
 
         self.empty_label.setVisible(False)
+        sort_text = self.sort_combo.currentText().lower()
+        self.feed_meta.setText(f"{len(papers)} papers \u00b7 sorted by {sort_text}")
 
-        # Create cells for each paper
         for paper in papers:
             cell = PaperCellWidget(paper)
-
-            # Connect signals
-            cell.view_pdf_clicked.connect(self.view_pdf_requested.emit)
-            cell.add_note_clicked.connect(self.add_note_requested.emit)
-            cell.rate_paper_clicked.connect(self.rate_paper_requested.emit)
-
+            cell.clicked.connect(self._on_cell_clicked)
             self.container_layout.addWidget(cell)
             self.paper_cells.append(cell)
 
         logger.info(f"Displaying {len(papers)} papers in feed")
 
-    def add_paper(self, paper: Paper):
-        """
-        Add a single paper to the feed.
-
-        Args:
-            paper: Paper object
-        """
-        self.empty_label.setVisible(False)
-
-        cell = PaperCellWidget(paper)
-
-        # Connect signals
-        cell.view_pdf_clicked.connect(self.view_pdf_requested.emit)
-        cell.add_note_clicked.connect(self.add_note_requested.emit)
-        cell.rate_paper_clicked.connect(self.rate_paper_requested.emit)
-
-        # Insert at top (most recent first)
-        self.container_layout.insertWidget(0, cell)
-        self.paper_cells.insert(0, cell)
-
     def clear_papers(self):
         """Clear all papers from the feed."""
+        self.selected_cell = None
         for cell in self.paper_cells:
             cell.deleteLater()
-
         self.paper_cells.clear()
 
     def get_paper_count(self) -> int:
-        """Get number of papers in feed."""
         return len(self.paper_cells)
+
+    def get_search_text(self) -> str:
+        return self.search_input.text().strip()
+
+    def get_sort_key(self) -> str:
+        return self.sort_combo.currentData() or "date_desc"
+
+    def _on_cell_clicked(self, paper: Paper):
+        """Handle paper card click — select it."""
+        # Deselect previous
+        if self.selected_cell:
+            self.selected_cell.set_selected(False)
+
+        # Find and select the clicked cell
+        for cell in self.paper_cells:
+            if cell.paper.id == paper.id:
+                cell.set_selected(True)
+                self.selected_cell = cell
+                break
+
+        self.paper_selected.emit(paper)
+
+    def _on_search(self):
+        self.search_requested.emit(self.search_input.text().strip())
+
+    def _on_sort_changed(self):
+        self.sort_changed.emit(self.sort_combo.currentData() or "date_desc")

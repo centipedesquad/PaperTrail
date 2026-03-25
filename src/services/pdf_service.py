@@ -1,5 +1,5 @@
 """
-PDF service for myArXiv.
+PDF service for PaperTrail.
 Handles PDF downloading, streaming, and opening.
 """
 
@@ -152,17 +152,20 @@ class PDFService:
             logger.error(f"PDF not found: {pdf_path}")
             return False
 
-        # Update last accessed timestamp
-        self.paper_service.mark_accessed(paper.id)
-
         # Get PDF reader path from config
         reader_path = self.config_service.get_pdf_reader_path()
 
-        # Open with external reader
+        # Open with external reader first (priority operation)
         success = open_pdf_external(pdf_path, reader_path)
 
         if success:
             logger.info(f"Opened PDF: {pdf_path}")
+            # Update last accessed timestamp after successful open (non-critical operation)
+            try:
+                self.paper_service.mark_accessed(paper.id)
+            except Exception as e:
+                # Don't fail the open operation if timestamp update fails
+                logger.warning(f"Failed to update last accessed timestamp: {e}")
         else:
             logger.error(f"Failed to open PDF: {pdf_path}")
 

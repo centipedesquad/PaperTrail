@@ -1,4 +1,8 @@
-# myArXiv - arXiv Paper Management Application
+<p align="center">
+  <img src="src/assets/AppIcon.png" width="128" alt="PaperTrail icon">
+</p>
+
+# PaperTrail - arXiv Paper Management Application
 
 A desktop application for efficiently managing and organizing arXiv papers for research workflows.
 
@@ -11,23 +15,43 @@ A desktop application for efficiently managing and organizing arXiv papers for r
 - **PDF Management**: On-demand download with customizable naming patterns
 - **Reader Integration**: Opens PDFs in Skim (macOS) or configurable Linux readers
 - **Full-Text Search**: Fast FTS5-powered search across titles, abstracts, authors, and notes
+- **Advanced Filtering**: Filter by categories, date ranges, rating status, and PDF availability
+- **Flexible Sorting**: Sort papers by date (newest/oldest first) or title (A-Z/Z-A)
+- **Theme Support**: Light and dark mode with Ctrl+T toggle
+- **Preferences Dialog**: Configurable theme, font size, PDF settings, and fetch defaults
+- **Hierarchical Categories**: Smart grouping of arXiv categories by field (Physics, CS, Math, etc.)
 - **Cross-Platform**: Works on macOS and Linux
 
 ## Installation
 
-### Option 1: Pre-built Application (Recommended for macOS)
+### Option 1: Build the .app (Recommended for macOS)
 
-1. Download or build the .app bundle:
+#### Prerequisites
+
+- Python 3.10 or higher
+- `uv` package manager
+
+#### Steps
+
+1. Clone or download this repository
+
+2. Install dependencies and build:
    ```bash
+   uv sync
    ./build_app.sh
    ```
 
-2. Copy to Applications folder:
+3. Copy to Applications folder:
    ```bash
-   cp -r dist/myArXiv.app /Applications/
+   cp -r dist/PaperTrail.app /Applications/
    ```
 
-3. Launch from Launchpad or Spotlight
+4. If macOS Gatekeeper blocks the app (since it is not notarized), run:
+   ```bash
+   xattr -cr /Applications/PaperTrail.app
+   ```
+
+5. Launch from Launchpad or Spotlight
 
 See [BUILDING.md](BUILDING.md) for detailed build instructions.
 
@@ -42,15 +66,9 @@ See [BUILDING.md](BUILDING.md) for detailed build instructions.
 
 1. Clone or download this repository
 
-2. Create a virtual environment:
+2. Install dependencies:
 ```bash
-uv venv
-```
-
-3. Install dependencies:
-```bash
-uv pip install "PySide6>=6.6.0" "arxiv>=2.1.0" "requests>=2.31.0" \
-               "python-dateutil>=2.8.2" "PyMuPDF>=1.23.0"
+uv sync
 ```
 
 ## Usage
@@ -71,7 +89,7 @@ python main.py
 ### Running the Installed App
 
 - Launch from Applications folder
-- Or: `open /Applications/myArXiv.app`
+- Or: `open /Applications/PaperTrail.app`
 
 ### First Run
 
@@ -116,10 +134,16 @@ When you click "View PDF" on a paper:
 2. Click "Add/Edit Notes"
 3. Type your notes (auto-saves after 2 seconds)
 
-### Searching
+### Searching & Filtering
 
-- Use the search box in the toolbar for full-text search
-- Filter by categories, date range, and ratings in the left panel
+The left panel provides a comprehensive filter system:
+
+- **Full-text search** across titles, abstracts, and authors (powered by FTS5)
+- **Category filtering** with hierarchical grouping (Physics, CS, Math, etc.) and paper counts
+- **Date range** with quick presets (today, this week, this month) and custom range
+- **Rating status**: all, rated only, or unrated only
+- **PDF availability**: all, has PDF, or no PDF
+- **Sort by**: newest first, oldest first, title A-Z, or title Z-A
 
 ## Configuration
 
@@ -145,19 +169,35 @@ Example: `Smith_Jones_Attention_Is_All_You_Need_2301.12345.pdf`
 
 You can set a custom reader path in Preferences.
 
+### Preferences
+
+Access via **File > Preferences** (or Cmd+, on macOS):
+
+- **General**: Theme (light/dark), font size (8-20pt)
+- **PDF**: Reader path, default download behavior (ask/download/stream), naming pattern
+- **Fetching**: Max results per category, default fetch mode, number of recent days
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+T` | Toggle light/dark theme |
+| `Ctrl+F` | Fetch papers |
+| `Cmd+,` / `Ctrl+,` | Open Preferences |
+| `Cmd+Q` / `Ctrl+Q` | Quit |
+
 ## Documentation
 
 - **[README.md](README.md)** - This file, user guide
-- **[IMPLEMENTATION.md](IMPLEMENTATION.md)** - Complete implementation log tracking all phases, files, and changes
 - **[BUILDING.md](BUILDING.md)** - Build and distribution instructions
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Deployment guide and bundle details
+- **[CHANGELOG.md](CHANGELOG.md)** - Release history
 
 ## Development
 
 ### Project Structure
 
 ```
-myArXiv/
+PaperTrail/
 ├── src/
 │   ├── main.py                    # Application entry point
 │   ├── models.py                  # Data models
@@ -175,30 +215,28 @@ myArXiv/
 │   │   └── fetch_service.py
 │   ├── ui/                        # User interface
 │   │   ├── main_window.py
+│   │   ├── theme.py               # Light/dark theme system
 │   │   ├── widgets/
+│   │   │   ├── paper_cell_widget.py
+│   │   │   ├── paper_feed_widget.py
+│   │   │   ├── filter_panel_widget.py
+│   │   │   ├── context_panel_widget.py
+│   │   │   ├── rating_widget.py
+│   │   │   └── note_editor_widget.py
 │   │   └── dialogs/
+│   │       ├── fetch_papers_dialog.py
+│   │       ├── pdf_action_dialog.py
+│   │       └── preferences_dialog.py
+│   ├── assets/                    # App resources
+│   │   ├── AppIcon.icns           # Application icon (macOS)
+│   │   ├── AppIcon.png            # Application icon (general)
+│   │   └── fonts/                 # Bundled fonts (DM Sans, Source Serif, JetBrains Mono)
 │   └── utils/                     # Utilities
 │       ├── platform_utils.py
-│       └── async_utils.py
-├── data/                          # Runtime data (user-chosen location)
-├── tests/                         # Test suite
-└── requirements.txt
+│       ├── async_utils.py
+│       └── filename_utils.py
+└── pyproject.toml
 ```
-
-### Running Tests
-
-```bash
-pytest tests/
-```
-
-### Development Phases
-
-- ✅ **Phase 1**: Foundation (database, config, platform utils)
-- 🚧 **Phase 2**: arXiv Integration (API client, fetch service)
-- 🚧 **Phase 3**: PDF Management
-- 🚧 **Phase 4**: Ratings & Notes
-- 🚧 **Phase 5**: Search & Filtering
-- 🚧 **Phase 6**: Polish & Testing
 
 ## Future Features
 
@@ -206,11 +244,10 @@ pytest tests/
 - AI-powered keyword extraction
 - PDF annotation import from Skim
 - Export to BibTeX
-- Advanced filtering and sorting
 
 ## License
 
-MIT License
+AGPL-3.0-only. See [LICENSE](LICENSE) for details.
 
 ## Contributing
 
