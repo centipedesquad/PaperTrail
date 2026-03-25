@@ -158,12 +158,8 @@ class PaperRepository:
             (limit, offset)
         )
 
-        papers = []
-        for row in rows:
-            paper = self._row_to_paper(row)
-            self._load_related_data(paper)
-            papers.append(paper)
-
+        papers = [self._row_to_paper(row) for row in rows]
+        self._load_related_data_batch(papers)
         return papers
 
     def update_local_pdf_path(self, paper_id: int, pdf_path: str):
@@ -271,12 +267,8 @@ class PaperRepository:
 
         rows = self.db.fetch_all(query, tuple(params))
 
-        papers = []
-        for row in rows:
-            paper = self._row_to_paper(row)
-            self._load_related_data(paper)
-            papers.append(paper)
-
+        papers = [self._row_to_paper(row) for row in rows]
+        self._load_related_data_batch(papers)
         return papers
 
     def get_all_categories(self) -> List[tuple]:
@@ -379,80 +371,102 @@ class PaperRepository:
         )
 
     def _load_related_data(self, paper: Paper):
-        """Load authors, categories, notes, and ratings for a paper."""
-        # Load authors
+        """Load authors, categories, notes, and ratings for a single paper."""
+        self._load_related_data_batch([paper])
+
+    def _load_related_data_batch(self, papers: List[Paper]):
+        """Batch-load related data for multiple papers in 4 queries total."""
+        if not papers:
+            return
+
+        paper_ids = [p.id for p in papers]
+        paper_map = {p.id: p for p in papers}
+        placeholders = ','.join('?' * len(paper_ids))
+
+        # Load authors (1 query)
         author_rows = self.db.fetch_all(
-            """
-            SELECT a.*, pa.author_order
+            f"""
+            SELECT a.*, pa.author_order, pa.paper_id
             FROM authors a
             JOIN paper_authors pa ON a.id = pa.author_id
-            WHERE pa.paper_id = ?
-            ORDER BY pa.author_order
+            WHERE pa.paper_id IN ({placeholders})
+            ORDER BY pa.paper_id, pa.author_order
             """,
-            (paper.id,)
+            tuple(paper_ids)
         )
-        paper.authors = [
-            Author(
-                id=row['id'],
-                name=row['name'],
-                normalized_name=row['normalized_name'],
-                created_at=row['created_at'],
-                author_order=row['author_order']
+        # Group by paper_id
+        authors_by_paper: Dict[int, list] = {pid: [] for pid in paper_ids}
+        for row in author_rows:
+            authors_by_paper[row['paper_id']].append(
+                Author(
+                    id=row['id'],
+                    name=row['name'],
+                    normalized_name=row['normalized_name'],
+                    created_at=row['created_at'],
+                    author_order=row['author_order']
+                )
             )
-            for row in author_rows
-        ]
+        for paper in papers:
+            paper.authors = authors_by_paper.get(paper.id, [])
 
-        # Load categories
+        # Load categories (1 query)
         category_rows = self.db.fetch_all(
-            """
-            SELECT c.*, pc.is_primary
+            f"""
+            SELECT c.*, pc.is_primary, pc.paper_id
             FROM categories c
             JOIN paper_categories pc ON c.id = pc.category_id
-            WHERE pc.paper_id = ?
+            WHERE pc.paper_id IN ({placeholders})
             """,
-            (paper.id,)
+            tuple(paper_ids)
         )
-        paper.categories = [
-            Category(
-                id=row['id'],
-                code=row['code'],
-                name=row['name'],
-                parent_code=row['parent_code'],
-                created_at=row['created_at'],
-                is_primary=bool(row['is_primary'])
+        cats_by_paper: Dict[int, list] = {pid: [] for pid in paper_ids}
+        for row in category_rows:
+            cats_by_paper[row['paper_id']].append(
+                Category(
+                    id=row['id'],
+                    code=row['code'],
+                    name=row['name'],
+                    parent_code=row['parent_code'],
+                    created_at=row['created_at'],
+                    is_primary=bool(row['is_primary'])
+                )
             )
-            for row in category_rows
-        ]
+        for paper in papers:
+            paper.categories = cats_by_paper.get(paper.id, [])
 
-        # Load notes
-        note_row = self.db.fetch_one(
-            "SELECT * FROM paper_notes WHERE paper_id = ?",
-            (paper.id,)
+        # Load notes (1 query)
+        note_rows = self.db.fetch_all(
+            f"SELECT * FROM paper_notes WHERE paper_id IN ({placeholders})",
+            tuple(paper_ids)
         )
-        if note_row:
-            paper.notes = PaperNote(
-                id=note_row['id'],
-                paper_id=note_row['paper_id'],
-                note_text=note_row['note_text'],
-                created_at=note_row['created_at'],
-                updated_at=note_row['updated_at']
-            )
+        for row in note_rows:
+            paper = paper_map.get(row['paper_id'])
+            if paper:
+                paper.notes = PaperNote(
+                    id=row['id'],
+                    paper_id=row['paper_id'],
+                    note_text=row['note_text'],
+                    created_at=row['created_at'],
+                    updated_at=row['updated_at']
+                )
 
-        # Load ratings
-        rating_row = self.db.fetch_one(
-            "SELECT * FROM paper_ratings WHERE paper_id = ?",
-            (paper.id,)
+        # Load ratings (1 query)
+        rating_rows = self.db.fetch_all(
+            f"SELECT * FROM paper_ratings WHERE paper_id IN ({placeholders})",
+            tuple(paper_ids)
         )
-        if rating_row:
-            paper.ratings = PaperRating(
-                id=rating_row['id'],
-                paper_id=rating_row['paper_id'],
-                importance=rating_row['importance'],
-                comprehension=rating_row['comprehension'],
-                technicality=rating_row['technicality'],
-                created_at=rating_row['created_at'],
-                updated_at=rating_row['updated_at']
-            )
+        for row in rating_rows:
+            paper = paper_map.get(row['paper_id'])
+            if paper:
+                paper.ratings = PaperRating(
+                    id=row['id'],
+                    paper_id=row['paper_id'],
+                    importance=row['importance'],
+                    comprehension=row['comprehension'],
+                    technicality=row['technicality'],
+                    created_at=row['created_at'],
+                    updated_at=row['updated_at']
+                )
 
 
 class NotesRepository:

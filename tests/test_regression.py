@@ -232,3 +232,52 @@ class TestBatchTransactionRegression:
         ])
         # Only the new one should be created
         assert count == 1
+
+
+# ── Regression: Batch-loaded related data matches per-paper loading ──
+
+class TestBatchLoadRegression:
+    """Verify batch loading produces identical results to per-paper loading."""
+
+    def test_batch_loads_authors_correctly(self, paper_repo, sample_paper_data, sample_paper_data_2):
+        paper_repo.create(sample_paper_data)
+        paper_repo.create(sample_paper_data_2)
+
+        papers = paper_repo.get_all()
+        assert len(papers) == 2
+
+        # Find the paper with 2 authors
+        multi_author = [p for p in papers if p.arxiv_id == '2301.12345'][0]
+        assert len(multi_author.authors) == 2
+        assert multi_author.authors[0].name == 'Ashish Vaswani'
+
+        # Find the paper with 1 author
+        single_author = [p for p in papers if p.arxiv_id == '2301.99999'][0]
+        assert len(single_author.authors) == 1
+        assert single_author.authors[0].name == 'Kaiming He'
+
+    def test_batch_loads_categories_correctly(self, paper_repo, sample_paper_data):
+        paper_repo.create(sample_paper_data)
+        papers = paper_repo.get_all()
+        paper = papers[0]
+        codes = [c.code for c in paper.categories]
+        assert 'cs.CL' in codes
+        assert 'cs.AI' in codes
+
+    def test_batch_loads_notes_and_ratings(self, paper_repo, notes_repo, ratings_repo, sample_paper_data):
+        paper_id = paper_repo.create(sample_paper_data)
+        notes_repo.create_or_update(paper_id, "Test note")
+        ratings_repo.create_or_update(paper_id, importance="good")
+
+        papers = paper_repo.get_all()
+        paper = papers[0]
+        assert paper.notes is not None
+        assert paper.notes.note_text == "Test note"
+        assert paper.ratings is not None
+        assert paper.ratings.importance == "good"
+
+    def test_search_also_uses_batch_loading(self, paper_repo, sample_paper_data):
+        paper_repo.create(sample_paper_data)
+        results = paper_repo.search_papers(search_text="Attention")
+        assert len(results) == 1
+        assert len(results[0].authors) == 2
