@@ -2,6 +2,12 @@
 
 All notable changes to PaperTrail are documented in this file.
 
+## v0.6.1 — 2026-03-26
+
+### Fixed
+- Crash fix for new databases
+
+
 ## v0.6.0 — 2026-03-25
 
 ### Added

@@ -215,12 +215,10 @@ def main():
         # Initialize services
         db = get_database()
         config_service = ConfigService(db)
+        config_service.set_database_location(data_dir)
         paper_service = PaperService(db)
         fetch_service = FetchService(paper_service)
         pdf_service = PDFService(config_service, paper_service)
-
-        # Save data directory to settings
-        config_service.set_database_location(data_dir)
 
         # Apply font size setting
         base_font_size = config_service.get_font_size()
