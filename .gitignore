@@ -46,6 +46,7 @@ htmlcov/
 .claude/
 
 # Internal planning documents (not for repo)
+TODO.md
 IMPLEMENTATION.md
 BUGS.md
 TASKS.md
