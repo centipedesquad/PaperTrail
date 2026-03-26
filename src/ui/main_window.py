@@ -417,7 +417,8 @@ class MainWindow(QMainWindow):
 
         self.pdf_worker = PDFDownloadWorker(download_func, paper.pdf_url, "")
         self.pdf_worker.progress.connect(self._on_pdf_progress)
-        self.pdf_worker.finished.connect(lambda path: self._on_pdf_finished(paper, path))
+        paper_id = paper.id
+        self.pdf_worker.finished.connect(lambda path, pid=paper_id: self._on_pdf_finished(pid, path))
         self.pdf_worker.error.connect(self._on_pdf_error)
         self.pdf_worker.start()
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
@@ -426,16 +427,18 @@ class MainWindow(QMainWindow):
     def _on_pdf_progress(self, percentage: int, message: str):
         self._update_statusbar(message)
 
-    def _on_pdf_finished(self, paper, pdf_path: str):
+    def _on_pdf_finished(self, paper_id: int, pdf_path: str):
         QApplication.restoreOverrideCursor()
         self._update_statusbar("Download complete, opening PDF...", 2000)
+        paper = self.paper_service.get_paper(paper_id)
+        if not paper:
+            QMessageBox.critical(self, "Error", "Paper not found after download.")
+            return
         success = self.pdf_service.open_pdf(paper, pdf_path)
         if not success:
             QMessageBox.critical(self, "Error", "PDF downloaded but failed to open.")
         # Refresh context panel to show updated PDF status
-        full_paper = self.paper_service.get_paper(paper.id)
-        if full_paper:
-            self.context_panel.set_paper(full_paper)
+        self.context_panel.set_paper(paper)
 
     def _on_pdf_error(self, error: str):
         QApplication.restoreOverrideCursor()
