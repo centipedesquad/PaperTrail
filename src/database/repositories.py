@@ -218,6 +218,9 @@ class PaperRepository:
                     "id IN (SELECT rowid FROM papers_fts WHERE papers_fts MATCH ?)"
                 )
                 params.append(sanitized)
+            else:
+                # Query was non-empty but sanitized to nothing (all special chars)
+                return []
 
         if categories:
             placeholders = ','.join('?' * len(categories))
@@ -417,6 +420,7 @@ class PaperRepository:
             FROM categories c
             JOIN paper_categories pc ON c.id = pc.category_id
             WHERE pc.paper_id IN ({placeholders})
+            ORDER BY pc.is_primary DESC, c.code
             """,
             tuple(paper_ids)
         )

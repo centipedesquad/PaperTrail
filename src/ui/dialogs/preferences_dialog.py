@@ -315,11 +315,15 @@ class PreferencesDialog(QDialog):
 
     def _browse_reader(self):
         """Browse for PDF reader application."""
+        import sys
+        if sys.platform == 'darwin':
+            start_dir = '/Applications'
+            filter_str = 'Applications (*.app);;All Files (*)'
+        else:
+            start_dir = '/usr/bin'
+            filter_str = 'All Files (*)'
         file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Select PDF Reader",
-            "/Applications",
-            "Applications (*.app);;All Files (*)"
+            self, "Select PDF Reader", start_dir, filter_str
         )
         if file_path:
             self.reader_path_edit.setText(file_path)
