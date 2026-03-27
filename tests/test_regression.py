@@ -198,8 +198,8 @@ class TestBatchTransactionRegression:
                 'primary_category': 'cs.CV',
             },
         ]
-        count = paper_service.create_papers_batch(papers)
-        assert count == 2
+        result = paper_service.create_papers_batch(papers)
+        assert result['created'] == 2
 
         # Both should exist
         all_papers = paper_service.get_all_papers()
@@ -218,7 +218,7 @@ class TestBatchTransactionRegression:
         }
         paper_service.create_paper(paper)
 
-        count = paper_service.create_papers_batch([
+        result = paper_service.create_papers_batch([
             paper,  # duplicate
             {
                 'arxiv_id': '2301.00011',
@@ -231,7 +231,8 @@ class TestBatchTransactionRegression:
             },
         ])
         # Only the new one should be created
-        assert count == 1
+        assert result['created'] == 1
+        assert result['duplicates'] == 1
 
 
 # ── Regression: Batch-loaded related data matches per-paper loading ──

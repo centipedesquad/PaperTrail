@@ -35,17 +35,18 @@ class TestPaperService:
         assert len(papers) == 2
 
     def test_create_papers_batch(self, paper_service, sample_paper_data, sample_paper_data_2):
-        count = paper_service.create_papers_batch([sample_paper_data, sample_paper_data_2])
-        assert count == 2
+        result = paper_service.create_papers_batch([sample_paper_data, sample_paper_data_2])
+        assert result['created'] == 2
 
     def test_create_papers_batch_with_duplicates(self, paper_service, sample_paper_data):
         paper_service.create_paper(sample_paper_data)
-        count = paper_service.create_papers_batch([sample_paper_data])
-        assert count == 0
+        result = paper_service.create_papers_batch([sample_paper_data])
+        assert result['created'] == 0
+        assert result['duplicates'] == 1
 
     def test_create_papers_batch_empty(self, paper_service):
-        count = paper_service.create_papers_batch([])
-        assert count == 0
+        result = paper_service.create_papers_batch([])
+        assert result['created'] == 0
 
     def test_search_papers(self, paper_service, sample_paper_data):
         paper_service.create_paper(sample_paper_data)
