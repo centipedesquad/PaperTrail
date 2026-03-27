@@ -159,35 +159,30 @@ class ArxivClient:
         Returns:
             List of paper dictionaries
         """
-        try:
-            logger.info(f"Searching papers: {query}")
+        logger.info(f"Searching papers: {query}")
 
-            # Map sort criterion
-            sort_map = {
-                'relevance': arxiv.SortCriterion.Relevance,
-                'lastUpdatedDate': arxiv.SortCriterion.LastUpdatedDate,
-                'submittedDate': arxiv.SortCriterion.SubmittedDate,
-            }
-            sort_criterion = sort_map.get(sort_by, arxiv.SortCriterion.Relevance)
+        # Map sort criterion
+        sort_map = {
+            'relevance': arxiv.SortCriterion.Relevance,
+            'lastUpdatedDate': arxiv.SortCriterion.LastUpdatedDate,
+            'submittedDate': arxiv.SortCriterion.SubmittedDate,
+        }
+        sort_criterion = sort_map.get(sort_by, arxiv.SortCriterion.Relevance)
 
-            search = arxiv.Search(
-                query=query,
-                max_results=max_results,
-                sort_by=sort_criterion,
-                sort_order=arxiv.SortOrder.Descending
-            )
+        search = arxiv.Search(
+            query=query,
+            max_results=max_results,
+            sort_by=sort_criterion,
+            sort_order=arxiv.SortOrder.Descending
+        )
 
-            papers = []
-            for result in search.results():
-                paper = self._convert_result_to_dict(result)
-                papers.append(paper)
+        papers = []
+        for result in search.results():
+            paper = self._convert_result_to_dict(result)
+            papers.append(paper)
 
-            logger.info(f"Found {len(papers)} papers")
-            return papers
-
-        except Exception as e:
-            logger.error(f"Search failed: {e}")
-            return []
+        logger.info(f"Found {len(papers)} papers")
+        return papers
 
     def _convert_result_to_dict(self, result: arxiv.Result) -> dict:
         """

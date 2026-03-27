@@ -5,6 +5,7 @@ Implements CRUD operations for all entities.
 
 import logging
 import re
+import sqlite3
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
@@ -51,13 +52,16 @@ class PaperRepository:
             paper_data: Dictionary with paper data (including authors and categories)
 
         Returns:
-            Paper ID if successful, None otherwise
+            Paper ID if successful, None if duplicate (already exists)
+
+        Raises:
+            Exception: On non-duplicate database errors (disk full, schema error, etc.)
         """
         try:
             with self.db.transaction():
                 return self._create_inner(paper_data)
-        except Exception as e:
-            logger.error(f"Failed to create paper: {e}")
+        except sqlite3.IntegrityError:
+            logger.info(f"Duplicate paper: {paper_data.get('arxiv_id')}")
             return None
 
     def _create_inner(self, paper_data: dict) -> Optional[int]:

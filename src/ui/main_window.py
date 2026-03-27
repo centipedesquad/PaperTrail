@@ -432,9 +432,11 @@ class MainWindow(QMainWindow):
 
     def _on_fetch_finished(self, result: dict):
         self._pop_wait_cursor()
-        self._update_statusbar(
-            f"Fetched {result['created']} new papers ({result['duplicates']} duplicates)", 5000
-        )
+        errors = result.get('errors', 0)
+        msg = f"Fetched {result['created']} new papers ({result['duplicates']} duplicates)"
+        if errors:
+            msg += f", {errors} errors"
+        self._update_statusbar(msg, 5000)
 
         if hasattr(self, 'fetch_dialog') and self.fetch_dialog:
             self.fetch_dialog.fetch_complete(result)

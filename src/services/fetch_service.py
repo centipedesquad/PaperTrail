@@ -70,16 +70,16 @@ class FetchService:
         if progress_callback:
             progress_callback(70, "Saving to database...")
 
-        created_count = self.paper_service.create_papers_batch(papers_data)
-        duplicates = len(papers_data) - created_count
+        batch_result = self.paper_service.create_papers_batch(papers_data)
 
         if progress_callback:
             progress_callback(100, "Complete")
 
         result = {
             'fetched': len(papers_data),
-            'created': created_count,
-            'duplicates': duplicates,
+            'created': batch_result['created'],
+            'duplicates': batch_result['duplicates'],
+            'errors': batch_result['errors'],
             'papers': papers_data
         }
 
@@ -125,16 +125,16 @@ class FetchService:
         if progress_callback:
             progress_callback(70, "Saving to database...")
 
-        created_count = self.paper_service.create_papers_batch(papers_data)
-        duplicates = len(papers_data) - created_count
+        batch_result = self.paper_service.create_papers_batch(papers_data)
 
         if progress_callback:
             progress_callback(100, "Complete")
 
         result = {
             'fetched': len(papers_data),
-            'created': created_count,
-            'duplicates': duplicates,
+            'created': batch_result['created'],
+            'duplicates': batch_result['duplicates'],
+            'errors': batch_result['errors'],
             'papers': papers_data
         }
 
