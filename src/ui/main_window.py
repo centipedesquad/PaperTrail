@@ -412,10 +412,10 @@ class MainWindow(QMainWindow):
     def _start_pdf_download(self, paper, action: str):
         permanent = (action == "download")
 
-        def download_func(pdf_url, save_path, progress_callback):
+        def download_func(progress_callback):
             return self.pdf_service.download_pdf(paper, permanent=permanent, progress_callback=progress_callback)
 
-        self.pdf_worker = PDFDownloadWorker(download_func, paper.pdf_url, "")
+        self.pdf_worker = PDFDownloadWorker(download_func)
         self.pdf_worker.progress.connect(self._on_pdf_progress)
         paper_id = paper.id
         self.pdf_worker.finished.connect(lambda path, pid=paper_id: self._on_pdf_finished(pid, path))

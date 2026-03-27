@@ -104,20 +104,20 @@ class PDFService:
             # Download
             logger.info(f"Downloading PDF from {paper.pdf_url}")
 
-            response = requests.get(paper.pdf_url, stream=True, timeout=30)
-            response.raise_for_status()
+            with requests.get(paper.pdf_url, stream=True, timeout=30) as response:
+                response.raise_for_status()
 
-            total_size = int(response.headers.get('content-length', 0))
-            downloaded = 0
+                total_size = int(response.headers.get('content-length', 0))
+                downloaded = 0
 
-            with open(pdf_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
+                with open(pdf_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
 
-                        if progress_callback:
-                            progress_callback(downloaded, total_size)
+                            if progress_callback:
+                                progress_callback(downloaded, total_size)
 
             logger.info(f"PDF downloaded to: {pdf_path}")
 

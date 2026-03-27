@@ -65,19 +65,15 @@ class PDFDownloadWorker(QThread):
     finished = Signal(str)  # Local file path
     error = Signal(str)  # Error message
 
-    def __init__(self, download_func: Callable, pdf_url: str, save_path: str):
+    def __init__(self, download_func: Callable):
         """
         Initialize PDF download worker.
 
         Args:
-            download_func: Function to call for downloading
-            pdf_url: URL of PDF to download
-            save_path: Local path to save PDF
+            download_func: Callable(progress_callback) -> str path
         """
         super().__init__()
         self.download_func = download_func
-        self.pdf_url = pdf_url
-        self.save_path = save_path
         self._is_cancelled = False
 
     def run(self):
@@ -93,12 +89,10 @@ class PDFDownloadWorker(QThread):
                 if total > 0:
                     percentage = int((current / total) * 100)
                     self.progress.emit(percentage, f"Downloading: {current}/{total} bytes")
+                else:
+                    self.progress.emit(-1, f"Downloading: {current} bytes")
 
-            result_path = self.download_func(
-                self.pdf_url,
-                self.save_path,
-                progress_callback
-            )
+            result_path = self.download_func(progress_callback)
 
             if self._is_cancelled:
                 self.progress.emit(100, "Cancelled")
