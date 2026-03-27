@@ -311,6 +311,9 @@ class FilterPanelWidget(QWidget):
         category_counts = category_counts or {}
         self._category_counts = category_counts
 
+        # Preserve selected categories that still exist
+        old_selected = set(self._selected_categories)
+
         # Clear existing
         for item in self.category_items.values():
             item.deleteLater()
@@ -338,6 +341,15 @@ class FilterPanelWidget(QWidget):
             self.categories_layout.addWidget(item)
             self.category_items[f"cat_{code}"] = item
             shown += 1
+
+        # Restore selections that still exist
+        for code in old_selected:
+            key = f"cat_{code}"
+            if key in self.category_items:
+                self._selected_categories.add(code)
+                self.category_items[key].set_active(True)
+        if self._selected_categories:
+            self.clear_cats_item.setVisible(True)
 
         # Update total count on "All Papers"
         total = sum(category_counts.values()) if category_counts else 0

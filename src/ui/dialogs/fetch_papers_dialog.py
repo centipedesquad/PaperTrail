@@ -236,13 +236,18 @@ class FetchPapersDialog(QDialog):
         self.progress_bar.setVisible(False)
         self.fetch_button.setEnabled(True)
 
+        fetched = result.get('fetched', 0)
+        created = result.get('created', 0)
+        duplicates = result.get('duplicates', 0)
         message = (
             f"Fetch complete!\n\n"
-            f"Fetched: {result['fetched']} papers\n"
-            f"New: {result['created']} papers\n"
-            f"Duplicates: {result['duplicates']} papers"
+            f"Fetched: {fetched} papers\n"
+            f"New: {created} papers\n"
+            f"Duplicates: {duplicates} papers"
         )
 
+        self.raise_()
+        self.activateWindow()
         QMessageBox.information(self, "Fetch Complete", message)
         self.accept()
 
