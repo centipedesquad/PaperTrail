@@ -249,9 +249,15 @@ class PaperRepository:
 
         if has_rating is not None:
             if has_rating:
-                where_clauses.append("id IN (SELECT paper_id FROM paper_ratings)")
+                where_clauses.append(
+                    "id IN (SELECT paper_id FROM paper_ratings "
+                    "WHERE importance IS NOT NULL OR comprehension IS NOT NULL OR technicality IS NOT NULL)"
+                )
             else:
-                where_clauses.append("id NOT IN (SELECT paper_id FROM paper_ratings)")
+                where_clauses.append(
+                    "id NOT IN (SELECT paper_id FROM paper_ratings "
+                    "WHERE importance IS NOT NULL OR comprehension IS NOT NULL OR technicality IS NOT NULL)"
+                )
 
         # Determine ORDER BY clause
         order_clauses = {

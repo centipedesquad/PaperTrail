@@ -148,7 +148,10 @@ class DatabaseConnection:
         """
         with self._lock:
             conn = self.connect()
-            return conn.executemany(query, params_list)
+            cursor = conn.executemany(query, params_list)
+            if not self._in_transaction:
+                conn.commit()
+            return cursor
 
     def fetch_one(self, query: str, params: tuple = ()) -> Optional[sqlite3.Row]:
         """
