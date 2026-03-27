@@ -350,13 +350,11 @@ class FilterPanelWidget(QWidget):
         if self._selected_categories:
             self.clear_cats_item.setVisible(True)
 
-        # Update total count on "All Papers"
-        total = sum(category_counts.values()) if category_counts else 0
-        self._total_count = total
-        if "all" in self.nav_items:
-            self.nav_items["all"].set_count(total)
+        # Note: "All Papers" count is set by set_library_counts() which has the
+        # correct deduplicated total. Don't compute it here from category sums
+        # because multi-category papers would be double-counted.
 
-        logger.info(f"Nav rail: {shown} categories shown, {total} total papers")
+        logger.info(f"Nav rail: {shown} categories shown")
 
     def get_filters(self) -> dict:
         """Get current filter state."""

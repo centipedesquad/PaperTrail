@@ -132,12 +132,15 @@ def cleanup_cache_dir(cache_dir: str):
 
     try:
         file_count = 0
-        for file in cache_path.glob("*"):
-            if file.is_file():
-                file.unlink()
+        for item in cache_path.glob("*"):
+            if item.is_file():
+                item.unlink()
+                file_count += 1
+            elif item.is_dir():
+                shutil.rmtree(item)
                 file_count += 1
 
-        logger.info(f"Cleaned up {file_count} cached files from {cache_dir}")
+        logger.info(f"Cleaned up {file_count} cached items from {cache_dir}")
 
     except Exception as e:
         logger.error(f"Failed to cleanup cache directory: {e}")

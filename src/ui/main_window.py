@@ -45,6 +45,10 @@ class MainWindow(QMainWindow):
         self._setup_statusbar()
         self._setup_shortcuts()
 
+        # Subscribe to theme changes so apply_to_app fires for programmatic changes
+        theme = get_theme_manager()
+        theme.add_theme_listener(self._on_theme_changed)
+
         # Load initial data
         self._load_categories()
         self._load_papers()
@@ -126,9 +130,14 @@ class MainWindow(QMainWindow):
         papers_menu = menubar.addMenu("&Papers")
 
         fetch_action = QAction("&Fetch Papers", self)
-        fetch_action.setShortcut(QKeySequence("Ctrl+F"))
+        fetch_action.setShortcut(QKeySequence("Ctrl+Shift+F"))
         fetch_action.triggered.connect(self._fetch_papers)
         papers_menu.addAction(fetch_action)
+
+        search_action = QAction("&Search", self)
+        search_action.setShortcut(QKeySequence("Ctrl+F"))
+        search_action.triggered.connect(lambda: self.paper_feed.search_input.setFocus())
+        papers_menu.addAction(search_action)
 
         refresh_action = QAction("&Refresh", self)
         refresh_action.setShortcut(QKeySequence.Refresh)
@@ -169,6 +178,11 @@ class MainWindow(QMainWindow):
         self.config_service.set_theme(theme_name)
         self._update_statusbar(f"Switched to {theme_name} theme", 2000)
         logger.info(f"Theme toggled to: {theme_name}")
+
+    def _on_theme_changed(self):
+        """Handle theme change — reapply global stylesheet."""
+        theme_manager = get_theme_manager()
+        theme_manager.apply_to_app(QApplication.instance())
 
     # --- Worker lifecycle helpers ---
 
@@ -404,7 +418,7 @@ class MainWindow(QMainWindow):
     # --- Fetch / Download ---
 
     def _fetch_papers(self):
-        self.fetch_dialog = FetchPapersDialog(self)
+        self.fetch_dialog = FetchPapersDialog(config_service=self.config_service, parent=self)
         self.fetch_dialog.fetch_requested.connect(self._start_fetch)
         self.fetch_dialog.exec()
 

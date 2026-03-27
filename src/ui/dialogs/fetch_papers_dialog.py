@@ -22,11 +22,12 @@ class FetchPapersDialog(QDialog):
     # Signal emitted when fetch is requested
     fetch_requested = Signal(str, list, int, int)  # (mode, categories, max_results, days)
 
-    def __init__(self, parent=None):
+    def __init__(self, config_service=None, parent=None):
         """
         Initialize fetch papers dialog.
 
         Args:
+            config_service: Optional ConfigService to load saved preferences
             parent: Parent widget
         """
         super().__init__(parent)
@@ -35,6 +36,8 @@ class FetchPapersDialog(QDialog):
         self.setMinimumHeight(400)
 
         self._setup_ui()
+        if config_service:
+            self._load_preferences(config_service)
 
     def _setup_ui(self):
         """Setup UI components."""
@@ -169,6 +172,15 @@ class FetchPapersDialog(QDialog):
         buttons_layout.addWidget(cancel_button)
 
         layout.addLayout(buttons_layout)
+
+    def _load_preferences(self, config_service):
+        """Load saved preferences from config service."""
+        mode = config_service.get_fetch_mode()
+        idx = self.mode_combo.findData(mode)
+        if idx >= 0:
+            self.mode_combo.setCurrentIndex(idx)
+        self.days_spin.setValue(config_service.get_recent_days())
+        self.max_results_spin.setValue(config_service.get_max_fetch_results())
 
     def _on_mode_changed(self, index):
         """Handle mode selection change."""
