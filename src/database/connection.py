@@ -29,6 +29,7 @@ class DatabaseConnection:
         self._connection: Optional[sqlite3.Connection] = None
         self._lock = threading.RLock()
         self._in_transaction = False
+        self._recovering = False
 
         # Ensure parent directory exists
         db_dir = os.path.dirname(db_path)
@@ -88,27 +89,34 @@ class DatabaseConnection:
 
     def _handle_corrupt_database(self):
         """Back up the corrupt database and create a fresh connection."""
-        backup_path = self.db_path + '.corrupt'
-        logger.warning(
-            f"Database is corrupt. Backing up to {backup_path} and creating fresh database."
-        )
-        # Close the connection to the corrupt file
-        if self._connection:
-            try:
-                self._connection.close()
-            except Exception:
-                pass
-            self._connection = None
-
-        # Back up corrupt file
+        if self._recovering:
+            raise RuntimeError("Database recovery already in progress — cannot recurse")
+        self._recovering = True
         try:
-            shutil.copy2(self.db_path, backup_path)
-            os.remove(self.db_path)
-        except OSError as e:
-            logger.error(f"Failed to back up corrupt database: {e}")
+            backup_path = self.db_path + '.corrupt'
+            logger.warning(
+                f"Database is corrupt. Backing up to {backup_path} and creating fresh database."
+            )
+            # Close the connection to the corrupt file
+            if self._connection:
+                try:
+                    self._connection.close()
+                except Exception:
+                    pass
+                self._connection = None
 
-        # Reconnect to a fresh database (connect() will re-apply all PRAGMAs)
-        self.connect()
+            # Back up corrupt file
+            try:
+                shutil.copy2(self.db_path, backup_path)
+                os.remove(self.db_path)
+            except OSError as e:
+                logger.error(f"Failed to back up corrupt database: {e}")
+                return  # Don't attempt reconnect if we can't remove the corrupt file
+
+            # Reconnect to a fresh database (connect() will re-apply all PRAGMAs)
+            self.connect()
+        finally:
+            self._recovering = False
 
     def close(self):
         """Close database connection."""

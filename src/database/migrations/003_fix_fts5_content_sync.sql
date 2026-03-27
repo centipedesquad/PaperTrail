@@ -61,32 +61,51 @@ BEGIN
     VALUES(NEW.id, NEW.arxiv_id, NEW.title, NEW.abstract, '');
 END;
 
--- Author INSERT trigger: update authors field via UPDATE (works on contentless for existing rows)
+-- Author INSERT trigger: delete old FTS row + reinsert with updated authors
+-- (contentless FTS5 does NOT support UPDATE — must use delete-then-reinsert)
 CREATE TRIGGER IF NOT EXISTS papers_fts_update_authors_insert AFTER INSERT ON paper_authors
 BEGIN
-    UPDATE papers_fts
-    SET authors = (
-        SELECT GROUP_CONCAT(a.name, ' ')
-        FROM paper_authors pa
-        JOIN authors a ON pa.author_id = a.id
-        WHERE pa.paper_id = NEW.paper_id
-        ORDER BY pa.author_order
-    )
-    WHERE rowid = NEW.paper_id;
+    INSERT INTO papers_fts(papers_fts, rowid, arxiv_id, title, abstract, authors)
+    VALUES('delete', NEW.paper_id,
+        (SELECT arxiv_id FROM papers WHERE id = NEW.paper_id),
+        (SELECT title FROM papers WHERE id = NEW.paper_id),
+        (SELECT abstract FROM papers WHERE id = NEW.paper_id),
+        '');
+    INSERT INTO papers_fts(rowid, arxiv_id, title, abstract, authors)
+    VALUES(NEW.paper_id,
+        (SELECT arxiv_id FROM papers WHERE id = NEW.paper_id),
+        (SELECT title FROM papers WHERE id = NEW.paper_id),
+        (SELECT abstract FROM papers WHERE id = NEW.paper_id),
+        COALESCE((
+            SELECT GROUP_CONCAT(a.name, ' ')
+            FROM paper_authors pa
+            JOIN authors a ON pa.author_id = a.id
+            WHERE pa.paper_id = NEW.paper_id
+            ORDER BY pa.author_order
+        ), ''));
 END;
 
--- Author DELETE trigger: update authors field
+-- Author DELETE trigger: delete old FTS row + reinsert with updated authors
 CREATE TRIGGER IF NOT EXISTS papers_fts_update_authors_delete AFTER DELETE ON paper_authors
 BEGIN
-    UPDATE papers_fts
-    SET authors = COALESCE((
-        SELECT GROUP_CONCAT(a.name, ' ')
-        FROM paper_authors pa
-        JOIN authors a ON pa.author_id = a.id
-        WHERE pa.paper_id = OLD.paper_id
-        ORDER BY pa.author_order
-    ), '')
-    WHERE rowid = OLD.paper_id;
+    INSERT INTO papers_fts(papers_fts, rowid, arxiv_id, title, abstract, authors)
+    VALUES('delete', OLD.paper_id,
+        (SELECT arxiv_id FROM papers WHERE id = OLD.paper_id),
+        (SELECT title FROM papers WHERE id = OLD.paper_id),
+        (SELECT abstract FROM papers WHERE id = OLD.paper_id),
+        '');
+    INSERT INTO papers_fts(rowid, arxiv_id, title, abstract, authors)
+    VALUES(OLD.paper_id,
+        (SELECT arxiv_id FROM papers WHERE id = OLD.paper_id),
+        (SELECT title FROM papers WHERE id = OLD.paper_id),
+        (SELECT abstract FROM papers WHERE id = OLD.paper_id),
+        COALESCE((
+            SELECT GROUP_CONCAT(a.name, ' ')
+            FROM paper_authors pa
+            JOIN authors a ON pa.author_id = a.id
+            WHERE pa.paper_id = OLD.paper_id
+            ORDER BY pa.author_order
+        ), ''));
 END;
 
 -- Update schema version
