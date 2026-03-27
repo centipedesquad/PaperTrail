@@ -169,7 +169,7 @@ class PaperRepository:
             "UPDATE papers SET local_pdf_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             (pdf_path, paper_id)
         )
-        self.db.commit()
+        # auto-committed by execute()
 
     def update_last_accessed(self, paper_id: int):
         """Update last accessed timestamp."""
@@ -177,7 +177,7 @@ class PaperRepository:
             "UPDATE papers SET last_accessed = CURRENT_TIMESTAMP WHERE id = ?",
             (paper_id,)
         )
-        self.db.commit()
+        # auto-committed by execute()
 
     def search_papers(
         self,
@@ -511,7 +511,7 @@ class NotesRepository:
     def delete(self, paper_id: int):
         """Delete note for a paper."""
         self.db.execute("DELETE FROM paper_notes WHERE paper_id = ?", (paper_id,))
-        self.db.commit()
+        # auto-committed by execute()
 
 
 class RatingsRepository:
@@ -565,4 +565,4 @@ class RatingsRepository:
     def delete(self, paper_id: int):
         """Delete rating for a paper."""
         self.db.execute("DELETE FROM paper_ratings WHERE paper_id = ?", (paper_id,))
-        self.db.commit()
+        # auto-committed by execute()

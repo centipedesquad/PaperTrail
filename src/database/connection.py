@@ -28,6 +28,7 @@ class DatabaseConnection:
         self.db_path = db_path
         self._connection: Optional[sqlite3.Connection] = None
         self._lock = threading.RLock()
+        self._in_transaction = False
 
         # Ensure parent directory exists
         db_dir = os.path.dirname(db_path)
@@ -106,12 +107,8 @@ class DatabaseConnection:
         except OSError as e:
             logger.error(f"Failed to back up corrupt database: {e}")
 
-        # Reconnect to a fresh database
-        self._connection = sqlite3.connect(
-            self.db_path,
-            check_same_thread=False,
-            timeout=30.0
-        )
+        # Reconnect to a fresh database (connect() will re-apply all PRAGMAs)
+        self.connect()
 
     def close(self):
         """Close database connection."""
@@ -122,7 +119,7 @@ class DatabaseConnection:
 
     def execute(self, query: str, params: tuple = ()) -> sqlite3.Cursor:
         """
-        Execute a query without returning results.
+        Execute a query. Auto-commits when not inside a transaction() block.
 
         Args:
             query: SQL query string
@@ -133,7 +130,10 @@ class DatabaseConnection:
         """
         with self._lock:
             conn = self.connect()
-            return conn.execute(query, params)
+            cursor = conn.execute(query, params)
+            if not self._in_transaction:
+                conn.commit()
+            return cursor
 
     def executemany(self, query: str, params_list: list) -> sqlite3.Cursor:
         """
@@ -208,6 +208,7 @@ class DatabaseConnection:
         """
         self._lock.acquire()
         conn = self.connect()
+        self._in_transaction = True
         try:
             yield conn
             conn.commit()
@@ -216,14 +217,17 @@ class DatabaseConnection:
             logger.error(f"Transaction failed: {e}")
             raise
         finally:
+            self._in_transaction = False
             self._lock.release()
 
     def vacuum(self):
         """
         Optimize database by reclaiming unused space.
-        Should be called periodically.
+        VACUUM requires autocommit mode — execute directly on the connection.
         """
-        self.execute("VACUUM")
+        with self._lock:
+            conn = self.connect()
+            conn.execute("VACUUM")
         logger.info("Database vacuumed")
 
     def get_schema_version(self) -> Optional[str]:
