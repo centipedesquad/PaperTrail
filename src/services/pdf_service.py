@@ -96,28 +96,35 @@ class PDFService:
                 generator = FilenameGenerator(pattern)
                 filename = generator.generate(paper)
                 pdf_path = os.path.join(self.pdfs_dir, filename)
+                # Avoid overwriting a different paper's file
+                if os.path.exists(pdf_path):
+                    base, ext = os.path.splitext(filename)
+                    safe_id = paper.arxiv_id.replace('/', '_')
+                    filename = f"{base}_{safe_id}{ext}"
+                    pdf_path = os.path.join(self.pdfs_dir, filename)
             else:
-                # Use simple arxiv_id for cache
-                filename = f"{paper.arxiv_id}.pdf"
+                # Use sanitized arxiv_id for cache (legacy IDs contain '/')
+                safe_id = paper.arxiv_id.replace('/', '_')
+                filename = f"{safe_id}.pdf"
                 pdf_path = os.path.join(self.cache_dir, filename)
 
             # Download
             logger.info(f"Downloading PDF from {paper.pdf_url}")
 
-            response = requests.get(paper.pdf_url, stream=True, timeout=30)
-            response.raise_for_status()
+            with requests.get(paper.pdf_url, stream=True, timeout=30) as response:
+                response.raise_for_status()
 
-            total_size = int(response.headers.get('content-length', 0))
-            downloaded = 0
+                total_size = int(response.headers.get('content-length', 0))
+                downloaded = 0
 
-            with open(pdf_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
+                with open(pdf_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            downloaded += len(chunk)
 
-                        if progress_callback:
-                            progress_callback(downloaded, total_size)
+                            if progress_callback:
+                                progress_callback(downloaded, total_size)
 
             logger.info(f"PDF downloaded to: {pdf_path}")
 

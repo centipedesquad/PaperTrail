@@ -7,7 +7,7 @@ See DESIGN.md for the full design system specification.
 import logging
 import os
 from enum import Enum
-from typing import Dict
+from typing import Dict, List, Callable
 from PySide6.QtGui import QPalette, QColor, QFontDatabase, QFont
 from PySide6.QtWidgets import QApplication
 
@@ -163,6 +163,7 @@ class ThemeManager:
             ThemeMode.DARK: DARK_PALETTE,
         }
         self._fonts_loaded = False
+        self._theme_listeners: List[Callable] = []
 
     @property
     def current_mode(self) -> ThemeMode:
@@ -178,6 +179,26 @@ class ThemeManager:
         if mode != self._current_mode:
             self._current_mode = mode
             logger.info(f"Theme changed to: {mode.value}")
+            self._notify_listeners()
+
+    def add_theme_listener(self, callback: Callable):
+        """Register a callback to be called when the theme changes."""
+        self._theme_listeners.append(callback)
+
+    def remove_theme_listener(self, callback: Callable):
+        """Unregister a theme change callback."""
+        try:
+            self._theme_listeners.remove(callback)
+        except ValueError:
+            pass
+
+    def _notify_listeners(self):
+        """Notify all registered listeners of theme change."""
+        for listener in self._theme_listeners:
+            try:
+                listener()
+            except Exception as e:
+                logger.error(f"Theme listener error: {e}")
 
     def get_color(self, name: str) -> str:
         return self.palette.get(name)

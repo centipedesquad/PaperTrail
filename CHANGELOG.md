@@ -2,6 +2,30 @@
 
 All notable changes to PaperTrail are documented in this file.
 
+## v0.6.2 — 2026-03-27
+
+### Fixed
+- FTS5 author search completely broken — contentless table triggers used invalid UPDATE syntax, now use correct delete-then-reinsert with exact value matching
+- Corrupt database recovery could infinitely recurse and crash the app
+- PDF downloads could silently overwrite another paper's file on filename collision
+- Database write failures (disk full, schema errors) misreported as "paper already exists"
+- arXiv search swallowed all exceptions, preventing retry logic from working
+- arXiv preview/search network errors shown as "Not Found" instead of proper error messages
+- Theme toggle only partially updated widgets — main window now subscribes to theme listener
+- Cache cleanup skipped subdirectories, leaving orphaned folders
+- Ctrl+F opened Fetch dialog instead of focusing search bar (now Ctrl+F = search, Ctrl+Shift+F = fetch)
+- "All Papers" count temporarily wrong after category refresh (double-counted multi-category papers)
+- Fetch dialog ignored saved preferences, always starting with defaults
+- Migration file numbering collision caused FTS5 fix to be silently skipped on upgrades
+- Imported view search ignored origin filter, showing all papers instead of imports only
+- Batch import error count not shown in status bar
+- Test suite updated for new batch creation return type
+
+### Changed
+- `PaperRepository.create()` now only catches `sqlite3.IntegrityError` — other errors propagate
+- `create_papers_batch()` returns `{created, duplicates, errors}` dict instead of bare int
+- FTS5 triggers use BEFORE DELETE/UPDATE to ensure author data is available for exact-match deletes
+
 ## v0.6.1 — 2026-03-26
 
 ### Fixed

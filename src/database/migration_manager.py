@@ -4,6 +4,7 @@ Handles schema versioning and migrations.
 """
 
 import os
+import re
 import logging
 from pathlib import Path
 from typing import List, Optional
@@ -141,6 +142,9 @@ class MigrationManager:
             # Drop all tables
             for table in tables:
                 table_name = table['name']
+                if not re.match(r'^[a-zA-Z0-9_]+$', table_name):
+                    logger.warning(f"Skipping invalid table name: {table_name}")
+                    continue
                 self.db.execute(f"DROP TABLE IF EXISTS {table_name}")
                 logger.info(f"Dropped table: {table_name}")
 

@@ -3,6 +3,7 @@ arXiv API client wrapper.
 Uses the official arxiv Python package.
 """
 
+import re
 import logging
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -33,30 +34,24 @@ class ArxivClient:
             List of paper dictionaries
         """
         papers = []
+        failed_categories = []
 
         for category in categories:
             try:
                 logger.info(f"Fetching new papers from category: {category}")
 
-                # Query for papers in this category, sorted by submission date
-                # Fetch extra to account for cross-listed papers we'll filter out
-                # Reduced multiplier to avoid rate limiting
                 search = arxiv.Search(
                     query=f"cat:{category}",
-                    max_results=max_results * 2,  # Fetch 2x since we'll filter for primary only
+                    max_results=max_results * 2,
                     sort_by=arxiv.SortCriterion.SubmittedDate,
                     sort_order=arxiv.SortOrder.Descending
                 )
 
                 category_papers = []
                 for result in search.results():
-                    # Only include papers where this category is the PRIMARY category
-                    # This matches arXiv.org/list behavior for "New submissions"
                     if result.primary_category == category:
                         paper = self._convert_result_to_dict(result)
                         category_papers.append(paper)
-
-                        # Stop once we have enough papers
                         if len(category_papers) >= max_results:
                             break
 
@@ -65,11 +60,13 @@ class ArxivClient:
 
             except Exception as e:
                 error_msg = str(e)
-                logger.error(f"Failed to fetch papers from {category}: {error_msg}")
-                # Check if it's a rate limit error
+                logger.warning(f"Failed to fetch papers from {category}: {error_msg}")
                 if "429" in error_msg:
                     raise Exception("arXiv API rate limit reached. Please wait 3-5 minutes before trying again.")
-                # Continue with other categories
+                failed_categories.append((category, e))
+
+        if failed_categories and not papers:
+            raise failed_categories[-1][1]
 
         logger.info(f"Fetched {len(papers)} papers total")
         return papers
@@ -92,33 +89,35 @@ class ArxivClient:
             List of paper dictionaries
         """
         papers = []
+        failed_categories = []
         cutoff_date = datetime.now() - timedelta(days=days)
 
         for category in categories:
             try:
                 logger.info(f"Fetching recent papers from category: {category}")
 
-                # Query for papers in this category
                 search = arxiv.Search(
                     query=f"cat:{category}",
-                    max_results=max_results * 2,  # Fetch more to filter by date
+                    max_results=max_results * 2,
                     sort_by=arxiv.SortCriterion.SubmittedDate,
                     sort_order=arxiv.SortOrder.Descending
                 )
 
+                cat_count = 0
                 for result in search.results():
-                    # Filter by date
                     if result.published.replace(tzinfo=None) >= cutoff_date:
                         paper = self._convert_result_to_dict(result)
                         papers.append(paper)
-
-                    # Stop if we have enough
-                    if len(papers) >= max_results:
-                        break
+                        cat_count += 1
+                        if cat_count >= max_results:
+                            break
 
             except Exception as e:
-                logger.error(f"Failed to fetch papers from {category}: {e}")
-                # Continue with other categories
+                logger.warning(f"Failed to fetch papers from {category}: {e}")
+                failed_categories.append((category, e))
+
+        if failed_categories and not papers:
+            raise failed_categories[-1][1]
 
         logger.info(f"Fetched {len(papers)} recent papers")
         return papers
@@ -133,20 +132,15 @@ class ArxivClient:
         Returns:
             Paper dictionary or None if not found
         """
+        logger.info(f"Fetching paper: {arxiv_id}")
+        search = arxiv.Search(id_list=[arxiv_id])
         try:
-            logger.info(f"Fetching paper: {arxiv_id}")
-
-            search = arxiv.Search(id_list=[arxiv_id])
             result = next(search.results())
-
             return self._convert_result_to_dict(result)
-
         except StopIteration:
             logger.warning(f"Paper not found: {arxiv_id}")
             return None
-        except Exception as e:
-            logger.error(f"Failed to fetch paper {arxiv_id}: {e}")
-            return None
+        # Other exceptions (network, timeout) propagate to caller
 
     def search_papers(
         self,
@@ -165,35 +159,30 @@ class ArxivClient:
         Returns:
             List of paper dictionaries
         """
-        try:
-            logger.info(f"Searching papers: {query}")
+        logger.info(f"Searching papers: {query}")
 
-            # Map sort criterion
-            sort_map = {
-                'relevance': arxiv.SortCriterion.Relevance,
-                'lastUpdatedDate': arxiv.SortCriterion.LastUpdatedDate,
-                'submittedDate': arxiv.SortCriterion.SubmittedDate,
-            }
-            sort_criterion = sort_map.get(sort_by, arxiv.SortCriterion.Relevance)
+        # Map sort criterion
+        sort_map = {
+            'relevance': arxiv.SortCriterion.Relevance,
+            'lastUpdatedDate': arxiv.SortCriterion.LastUpdatedDate,
+            'submittedDate': arxiv.SortCriterion.SubmittedDate,
+        }
+        sort_criterion = sort_map.get(sort_by, arxiv.SortCriterion.Relevance)
 
-            search = arxiv.Search(
-                query=query,
-                max_results=max_results,
-                sort_by=sort_criterion,
-                sort_order=arxiv.SortOrder.Descending
-            )
+        search = arxiv.Search(
+            query=query,
+            max_results=max_results,
+            sort_by=sort_criterion,
+            sort_order=arxiv.SortOrder.Descending
+        )
 
-            papers = []
-            for result in search.results():
-                paper = self._convert_result_to_dict(result)
-                papers.append(paper)
+        papers = []
+        for result in search.results():
+            paper = self._convert_result_to_dict(result)
+            papers.append(paper)
 
-            logger.info(f"Found {len(papers)} papers")
-            return papers
-
-        except Exception as e:
-            logger.error(f"Search failed: {e}")
-            return []
+        logger.info(f"Found {len(papers)} papers")
+        return papers
 
     def _convert_result_to_dict(self, result: arxiv.Result) -> dict:
         """
@@ -205,14 +194,12 @@ class ArxivClient:
         Returns:
             Paper dictionary
         """
-        # Extract arXiv ID (remove version if present)
-        arxiv_id = result.entry_id.split('/')[-1]
-        if 'v' in arxiv_id:
-            base_id = arxiv_id.split('v')[0]
-            version = arxiv_id.split('v')[1]
-        else:
-            base_id = arxiv_id
-            version = None
+        # Extract arXiv ID from entry URL, preserving legacy prefixes (e.g. hep-th/9901001)
+        raw_id = result.entry_id.rsplit('/abs/', 1)[-1] if '/abs/' in result.entry_id else result.entry_id.split('/')[-1]
+        # Split version suffix safely using regex (handles 'v' in legacy prefixes like solv-int/)
+        match = re.match(r'^(.+?)(?:v(\d+))?$', raw_id)
+        base_id = match.group(1)
+        version = match.group(2)
 
         # Extract authors
         authors = [

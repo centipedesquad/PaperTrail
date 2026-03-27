@@ -165,6 +165,8 @@ class ContextPanelWidget(QWidget):
 
     def set_paper(self, paper: Paper):
         """Display details for the given paper."""
+        # Flush pending note save for the OLD paper before switching
+        self.note_editor.set_note("")
         self.current_paper = paper
         self.empty_label.setVisible(False)
         self.detail_widget.setVisible(True)
@@ -230,6 +232,8 @@ class ContextPanelWidget(QWidget):
 
     def clear_selection(self):
         """Clear the panel back to empty state."""
+        # Flush pending note save before clearing
+        self.note_editor.set_note("")
         self.current_paper = None
         self.empty_label.setVisible(True)
         self.detail_widget.setVisible(False)

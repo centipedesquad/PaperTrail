@@ -39,7 +39,7 @@ class PaperService:
         """
         return self.paper_repo.create(paper_data)
 
-    def create_papers_batch(self, papers_data: List[dict]) -> int:
+    def create_papers_batch(self, papers_data: List[dict]) -> dict:
         """
         Create multiple papers in a single transaction.
 
@@ -47,20 +47,25 @@ class PaperService:
             papers_data: List of paper data dictionaries
 
         Returns:
-            Number of papers created
+            Dict with 'created', 'duplicates', and 'errors' counts
         """
         created_count = 0
+        duplicate_count = 0
+        error_count = 0
         try:
             with self.paper_repo.db.transaction():
                 for paper_data in papers_data:
                     paper_id = self.paper_repo._create_inner(paper_data)
                     if paper_id:
                         created_count += 1
+                    else:
+                        duplicate_count += 1
         except Exception as e:
             logger.error(f"Batch creation failed: {e}")
+            error_count = len(papers_data) - created_count - duplicate_count
 
         logger.info(f"Created {created_count} out of {len(papers_data)} papers")
-        return created_count
+        return {'created': created_count, 'duplicates': duplicate_count, 'errors': error_count}
 
     def get_paper(self, paper_id: int) -> Optional[Paper]:
         """Get paper by ID."""

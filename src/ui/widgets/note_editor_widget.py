@@ -93,7 +93,7 @@ class NoteEditorWidget(QWidget):
 
         # Update status
         if note_text:
-            self.status_label.setText("Auto-saved ✓")
+            self.status_label.setText("Saved")
         else:
             self.status_label.setText("")
 
@@ -105,11 +105,16 @@ class NoteEditorWidget(QWidget):
 
     def set_note(self, note_text: str):
         """
-        Set note text.
+        Set note text. Flushes any pending auto-save first to prevent
+        the timer from firing against the wrong paper.
 
         Args:
             note_text: Note content
         """
+        # Flush pending save before switching content
+        if self._save_timer.isActive():
+            self._save_timer.stop()
+            self._on_save_timer()
         # Block signals while setting text
         self.text_edit.blockSignals(True)
         self.text_edit.setPlainText(note_text or "")

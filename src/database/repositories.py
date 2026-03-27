@@ -5,6 +5,7 @@ Implements CRUD operations for all entities.
 
 import logging
 import re
+import sqlite3
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
@@ -51,13 +52,16 @@ class PaperRepository:
             paper_data: Dictionary with paper data (including authors and categories)
 
         Returns:
-            Paper ID if successful, None otherwise
+            Paper ID if successful, None if duplicate (already exists)
+
+        Raises:
+            Exception: On non-duplicate database errors (disk full, schema error, etc.)
         """
         try:
             with self.db.transaction():
                 return self._create_inner(paper_data)
-        except Exception as e:
-            logger.error(f"Failed to create paper: {e}")
+        except sqlite3.IntegrityError:
+            logger.info(f"Duplicate paper: {paper_data.get('arxiv_id')}")
             return None
 
     def _create_inner(self, paper_data: dict) -> Optional[int]:
@@ -169,7 +173,7 @@ class PaperRepository:
             "UPDATE papers SET local_pdf_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
             (pdf_path, paper_id)
         )
-        self.db.commit()
+        # auto-committed by execute()
 
     def update_last_accessed(self, paper_id: int):
         """Update last accessed timestamp."""
@@ -177,7 +181,7 @@ class PaperRepository:
             "UPDATE papers SET last_accessed = CURRENT_TIMESTAMP WHERE id = ?",
             (paper_id,)
         )
-        self.db.commit()
+        # auto-committed by execute()
 
     def search_papers(
         self,
@@ -218,6 +222,9 @@ class PaperRepository:
                     "id IN (SELECT rowid FROM papers_fts WHERE papers_fts MATCH ?)"
                 )
                 params.append(sanitized)
+            else:
+                # Query was non-empty but sanitized to nothing (all special chars)
+                return []
 
         if categories:
             placeholders = ','.join('?' * len(categories))
@@ -246,9 +253,15 @@ class PaperRepository:
 
         if has_rating is not None:
             if has_rating:
-                where_clauses.append("id IN (SELECT paper_id FROM paper_ratings)")
+                where_clauses.append(
+                    "id IN (SELECT paper_id FROM paper_ratings "
+                    "WHERE importance IS NOT NULL OR comprehension IS NOT NULL OR technicality IS NOT NULL)"
+                )
             else:
-                where_clauses.append("id NOT IN (SELECT paper_id FROM paper_ratings)")
+                where_clauses.append(
+                    "id NOT IN (SELECT paper_id FROM paper_ratings "
+                    "WHERE importance IS NOT NULL OR comprehension IS NOT NULL OR technicality IS NOT NULL)"
+                )
 
         # Determine ORDER BY clause
         order_clauses = {
@@ -417,6 +430,7 @@ class PaperRepository:
             FROM categories c
             JOIN paper_categories pc ON c.id = pc.category_id
             WHERE pc.paper_id IN ({placeholders})
+            ORDER BY pc.is_primary DESC, c.code
             """,
             tuple(paper_ids)
         )
@@ -511,7 +525,7 @@ class NotesRepository:
     def delete(self, paper_id: int):
         """Delete note for a paper."""
         self.db.execute("DELETE FROM paper_notes WHERE paper_id = ?", (paper_id,))
-        self.db.commit()
+        # auto-committed by execute()
 
 
 class RatingsRepository:
@@ -534,9 +548,9 @@ class RatingsRepository:
                 INSERT INTO paper_ratings (paper_id, importance, comprehension, technicality, updated_at)
                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(paper_id) DO UPDATE SET
-                    importance = COALESCE(excluded.importance, paper_ratings.importance),
-                    comprehension = COALESCE(excluded.comprehension, paper_ratings.comprehension),
-                    technicality = COALESCE(excluded.technicality, paper_ratings.technicality),
+                    importance = excluded.importance,
+                    comprehension = excluded.comprehension,
+                    technicality = excluded.technicality,
                     updated_at = CURRENT_TIMESTAMP
                 """,
                 (paper_id, importance, comprehension, technicality)
@@ -565,4 +579,4 @@ class RatingsRepository:
     def delete(self, paper_id: int):
         """Delete rating for a paper."""
         self.db.execute("DELETE FROM paper_ratings WHERE paper_id = ?", (paper_id,))
-        self.db.commit()
+        # auto-committed by execute()

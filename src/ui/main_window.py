@@ -38,11 +38,16 @@ class MainWindow(QMainWindow):
 
         self.fetch_worker = None
         self.pdf_worker = None
+        self._cursor_override_count = 0
 
         self._setup_ui()
         self._setup_menubar()
         self._setup_statusbar()
         self._setup_shortcuts()
+
+        # Subscribe to theme changes so apply_to_app fires for programmatic changes
+        theme = get_theme_manager()
+        theme.add_theme_listener(self._on_theme_changed)
 
         # Load initial data
         self._load_categories()
@@ -125,9 +130,14 @@ class MainWindow(QMainWindow):
         papers_menu = menubar.addMenu("&Papers")
 
         fetch_action = QAction("&Fetch Papers", self)
-        fetch_action.setShortcut(QKeySequence("Ctrl+F"))
+        fetch_action.setShortcut(QKeySequence("Ctrl+Shift+F"))
         fetch_action.triggered.connect(self._fetch_papers)
         papers_menu.addAction(fetch_action)
+
+        search_action = QAction("&Search", self)
+        search_action.setShortcut(QKeySequence("Ctrl+F"))
+        search_action.triggered.connect(lambda: self.paper_feed.search_input.setFocus())
+        papers_menu.addAction(search_action)
 
         refresh_action = QAction("&Refresh", self)
         refresh_action.setShortcut(QKeySequence.Refresh)
@@ -168,6 +178,56 @@ class MainWindow(QMainWindow):
         self.config_service.set_theme(theme_name)
         self._update_statusbar(f"Switched to {theme_name} theme", 2000)
         logger.info(f"Theme toggled to: {theme_name}")
+
+    def _on_theme_changed(self):
+        """Handle theme change — reapply global stylesheet."""
+        theme_manager = get_theme_manager()
+        theme_manager.apply_to_app(QApplication.instance())
+
+    # --- Worker lifecycle helpers ---
+
+    def _cleanup_worker(self, worker_attr: str):
+        """Cancel and clean up a worker before replacing it."""
+        worker = getattr(self, worker_attr, None)
+        if worker and worker.isRunning():
+            worker.cancel()
+            if not worker.wait(2000):
+                # Thread didn't stop — don't destroy it, let it finish naturally
+                logger.warning(f"Worker {worker_attr} did not stop in time, skipping cleanup")
+                return
+        if worker:
+            worker.deleteLater()
+            setattr(self, worker_attr, None)
+
+    def _stop_all_workers(self):
+        """Cancel and wait on all active workers."""
+        for attr in ['fetch_worker', 'pdf_worker']:
+            worker = getattr(self, attr, None)
+            if worker and worker.isRunning():
+                worker.cancel()
+                worker.wait(3000)
+
+    def _push_wait_cursor(self):
+        """Push a wait cursor (nestable)."""
+        self._cursor_override_count += 1
+        if self._cursor_override_count == 1:
+            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+    def _pop_wait_cursor(self):
+        """Pop a wait cursor (nestable)."""
+        if self._cursor_override_count > 0:
+            self._cursor_override_count -= 1
+            if self._cursor_override_count == 0:
+                QApplication.restoreOverrideCursor()
+
+    def _build_current_filters(self) -> dict:
+        """Build complete filter dict from filter panel + search bar state."""
+        filters = self.filter_panel.get_filters()
+        search_text = self.paper_feed.get_search_text()
+        if search_text:
+            filters['search_text'] = search_text
+        filters['sort_by'] = self.paper_feed.get_sort_key()
+        return filters
 
     # --- Data loading ---
 
@@ -358,11 +418,13 @@ class MainWindow(QMainWindow):
     # --- Fetch / Download ---
 
     def _fetch_papers(self):
-        self.fetch_dialog = FetchPapersDialog(self)
+        self.fetch_dialog = FetchPapersDialog(config_service=self.config_service, parent=self)
         self.fetch_dialog.fetch_requested.connect(self._start_fetch)
         self.fetch_dialog.exec()
 
     def _start_fetch(self, mode: str, categories: list, max_results: int, days: int):
+        self._cleanup_worker('fetch_worker')
+
         if mode == "new":
             fetch_func = lambda: self.fetch_service.fetch_new_papers(categories, max_results)
         else:
@@ -374,7 +436,7 @@ class MainWindow(QMainWindow):
         self.fetch_worker.error.connect(self._on_fetch_error)
         self.fetch_worker.start()
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        self._push_wait_cursor()
         self._update_statusbar("Fetching papers...")
 
     def _on_fetch_progress(self, percentage: int, message: str):
@@ -383,20 +445,22 @@ class MainWindow(QMainWindow):
             self.fetch_dialog.set_progress(percentage, message)
 
     def _on_fetch_finished(self, result: dict):
-        QApplication.restoreOverrideCursor()
-        self._update_statusbar(
-            f"Fetched {result['created']} new papers ({result['duplicates']} duplicates)", 5000
-        )
+        self._pop_wait_cursor()
+        errors = result.get('errors', 0)
+        msg = f"Fetched {result['created']} new papers ({result['duplicates']} duplicates)"
+        if errors:
+            msg += f", {errors} errors"
+        self._update_statusbar(msg, 5000)
 
         if hasattr(self, 'fetch_dialog') and self.fetch_dialog:
             self.fetch_dialog.fetch_complete(result)
 
         self._load_categories()
-        filters = self.filter_panel.get_filters()
-        self._load_papers(filters)
+        self._load_papers(self._build_current_filters())
+        self.context_panel.clear_selection()
 
     def _on_fetch_error(self, error: str):
-        QApplication.restoreOverrideCursor()
+        self._pop_wait_cursor()
         self._update_statusbar("Fetch failed", 5000)
 
         if hasattr(self, 'fetch_dialog') and self.fetch_dialog:
@@ -405,40 +469,46 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Fetch Error", f"Failed to fetch papers:\n\n{error}")
 
     def _refresh_papers(self):
-        filters = self.filter_panel.get_filters()
-        self._load_papers(filters)
+        self._load_papers(self._build_current_filters())
+        self.context_panel.clear_selection()
         self._update_statusbar("Papers refreshed", 2000)
 
     def _start_pdf_download(self, paper, action: str):
+        self._cleanup_worker('pdf_worker')
         permanent = (action == "download")
 
-        def download_func(pdf_url, save_path, progress_callback):
+        def download_func(progress_callback):
             return self.pdf_service.download_pdf(paper, permanent=permanent, progress_callback=progress_callback)
 
-        self.pdf_worker = PDFDownloadWorker(download_func, paper.pdf_url, "")
+        self.pdf_worker = PDFDownloadWorker(download_func)
         self.pdf_worker.progress.connect(self._on_pdf_progress)
-        self.pdf_worker.finished.connect(lambda path: self._on_pdf_finished(paper, path))
+        paper_id = paper.id
+        self.pdf_worker.finished.connect(lambda path, pid=paper_id: self._on_pdf_finished(pid, path))
         self.pdf_worker.error.connect(self._on_pdf_error)
         self.pdf_worker.start()
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        self._push_wait_cursor()
         self._update_statusbar("Downloading PDF...")
 
     def _on_pdf_progress(self, percentage: int, message: str):
         self._update_statusbar(message)
 
-    def _on_pdf_finished(self, paper, pdf_path: str):
-        QApplication.restoreOverrideCursor()
+    def _on_pdf_finished(self, paper_id: int, pdf_path: str):
+        self._pop_wait_cursor()
         self._update_statusbar("Download complete, opening PDF...", 2000)
+        paper = self.paper_service.get_paper(paper_id)
+        if not paper:
+            QMessageBox.critical(self, "Error", "Paper not found after download.")
+            return
         success = self.pdf_service.open_pdf(paper, pdf_path)
         if not success:
             QMessageBox.critical(self, "Error", "PDF downloaded but failed to open.")
-        # Refresh context panel to show updated PDF status
-        full_paper = self.paper_service.get_paper(paper.id)
-        if full_paper:
-            self.context_panel.set_paper(full_paper)
+        # Re-fetch to reflect last_accessed update from open_pdf
+        paper = self.paper_service.get_paper(paper_id)
+        if paper:
+            self.context_panel.set_paper(paper)
 
     def _on_pdf_error(self, error: str):
-        QApplication.restoreOverrideCursor()
+        self._pop_wait_cursor()
         self._update_statusbar("PDF download failed", 5000)
         QMessageBox.critical(self, "Download Error", f"Failed to download PDF:\n\n{error}")
 
@@ -455,11 +525,12 @@ class MainWindow(QMainWindow):
             self, "About PaperTrail",
             "<h3>PaperTrail</h3>"
             "<p>arXiv Paper Management Application</p>"
-            "<p>Version 0.6.0</p>"
+            "<p>Version 0.6.2</p>"
         )
 
     def closeEvent(self, event):
         logger.info("Closing main window")
+        self._stop_all_workers()
         try:
             deleted = self.pdf_service.cleanup_cache()
             logger.info(f"Cleaned up {deleted} cached PDF files")

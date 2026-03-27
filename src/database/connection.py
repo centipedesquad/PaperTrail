@@ -28,6 +28,8 @@ class DatabaseConnection:
         self.db_path = db_path
         self._connection: Optional[sqlite3.Connection] = None
         self._lock = threading.RLock()
+        self._in_transaction = False
+        self._recovering = False
 
         # Ensure parent directory exists
         db_dir = os.path.dirname(db_path)
@@ -87,31 +89,36 @@ class DatabaseConnection:
 
     def _handle_corrupt_database(self):
         """Back up the corrupt database and create a fresh connection."""
-        backup_path = self.db_path + '.corrupt'
-        logger.warning(
-            f"Database is corrupt. Backing up to {backup_path} and creating fresh database."
-        )
-        # Close the connection to the corrupt file
-        if self._connection:
-            try:
-                self._connection.close()
-            except Exception:
-                pass
-            self._connection = None
-
-        # Back up corrupt file
+        if self._recovering:
+            raise RuntimeError("Database recovery already in progress — cannot recurse")
+        self._recovering = True
         try:
-            shutil.copy2(self.db_path, backup_path)
-            os.remove(self.db_path)
-        except OSError as e:
-            logger.error(f"Failed to back up corrupt database: {e}")
+            backup_path = self.db_path + '.corrupt'
+            logger.warning(
+                f"Database is corrupt. Backing up to {backup_path} and creating fresh database."
+            )
+            # Close the connection to the corrupt file
+            if self._connection:
+                try:
+                    self._connection.close()
+                except Exception:
+                    pass
+                self._connection = None
 
-        # Reconnect to a fresh database
-        self._connection = sqlite3.connect(
-            self.db_path,
-            check_same_thread=False,
-            timeout=30.0
-        )
+            # Back up corrupt file
+            try:
+                shutil.copy2(self.db_path, backup_path)
+                os.remove(self.db_path)
+            except OSError as e:
+                logger.error(f"Failed to back up corrupt database: {e}")
+                raise RuntimeError(
+                    f"Cannot recover corrupt database — failed to remove {self.db_path}: {e}"
+                ) from e
+
+            # Reconnect to a fresh database (connect() will re-apply all PRAGMAs)
+            self.connect()
+        finally:
+            self._recovering = False
 
     def close(self):
         """Close database connection."""
@@ -122,7 +129,7 @@ class DatabaseConnection:
 
     def execute(self, query: str, params: tuple = ()) -> sqlite3.Cursor:
         """
-        Execute a query without returning results.
+        Execute a query. Auto-commits when not inside a transaction() block.
 
         Args:
             query: SQL query string
@@ -133,7 +140,10 @@ class DatabaseConnection:
         """
         with self._lock:
             conn = self.connect()
-            return conn.execute(query, params)
+            cursor = conn.execute(query, params)
+            if not self._in_transaction:
+                conn.commit()
+            return cursor
 
     def executemany(self, query: str, params_list: list) -> sqlite3.Cursor:
         """
@@ -148,7 +158,10 @@ class DatabaseConnection:
         """
         with self._lock:
             conn = self.connect()
-            return conn.executemany(query, params_list)
+            cursor = conn.executemany(query, params_list)
+            if not self._in_transaction:
+                conn.commit()
+            return cursor
 
     def fetch_one(self, query: str, params: tuple = ()) -> Optional[sqlite3.Row]:
         """
@@ -208,6 +221,7 @@ class DatabaseConnection:
         """
         self._lock.acquire()
         conn = self.connect()
+        self._in_transaction = True
         try:
             yield conn
             conn.commit()
@@ -216,14 +230,17 @@ class DatabaseConnection:
             logger.error(f"Transaction failed: {e}")
             raise
         finally:
+            self._in_transaction = False
             self._lock.release()
 
     def vacuum(self):
         """
         Optimize database by reclaiming unused space.
-        Should be called periodically.
+        VACUUM requires autocommit mode — execute directly on the connection.
         """
-        self.execute("VACUUM")
+        with self._lock:
+            conn = self.connect()
+            conn.execute("VACUUM")
         logger.info("Database vacuumed")
 
     def get_schema_version(self) -> Optional[str]:

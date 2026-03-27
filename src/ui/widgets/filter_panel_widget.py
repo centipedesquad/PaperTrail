@@ -311,6 +311,9 @@ class FilterPanelWidget(QWidget):
         category_counts = category_counts or {}
         self._category_counts = category_counts
 
+        # Preserve selected categories that still exist
+        old_selected = set(self._selected_categories)
+
         # Clear existing
         for item in self.category_items.values():
             item.deleteLater()
@@ -339,13 +342,19 @@ class FilterPanelWidget(QWidget):
             self.category_items[f"cat_{code}"] = item
             shown += 1
 
-        # Update total count on "All Papers"
-        total = sum(category_counts.values()) if category_counts else 0
-        self._total_count = total
-        if "all" in self.nav_items:
-            self.nav_items["all"].set_count(total)
+        # Restore selections that still exist (old_selected contains prefixed keys like "cat_cs.AI")
+        for key in old_selected:
+            if key in self.category_items:
+                self._selected_categories.add(key)
+                self.category_items[key].set_active(True)
+        if self._selected_categories:
+            self.clear_cats_item.setVisible(True)
 
-        logger.info(f"Nav rail: {shown} categories shown, {total} total papers")
+        # Note: "All Papers" count is set by set_library_counts() which has the
+        # correct deduplicated total. Don't compute it here from category sums
+        # because multi-category papers would be double-counted.
+
+        logger.info(f"Nav rail: {shown} categories shown")
 
     def get_filters(self) -> dict:
         """Get current filter state."""
