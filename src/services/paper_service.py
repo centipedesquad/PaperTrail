@@ -58,6 +58,7 @@ class PaperService:
                         created_count += 1
         except Exception as e:
             logger.error(f"Batch creation failed: {e}")
+            created_count = 0
 
         logger.info(f"Created {created_count} out of {len(papers_data)} papers")
         return created_count

@@ -534,9 +534,9 @@ class RatingsRepository:
                 INSERT INTO paper_ratings (paper_id, importance, comprehension, technicality, updated_at)
                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
                 ON CONFLICT(paper_id) DO UPDATE SET
-                    importance = COALESCE(excluded.importance, paper_ratings.importance),
-                    comprehension = COALESCE(excluded.comprehension, paper_ratings.comprehension),
-                    technicality = COALESCE(excluded.technicality, paper_ratings.technicality),
+                    importance = excluded.importance,
+                    comprehension = excluded.comprehension,
+                    technicality = excluded.technicality,
                     updated_at = CURRENT_TIMESTAMP
                 """,
                 (paper_id, importance, comprehension, technicality)
