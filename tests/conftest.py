@@ -22,10 +22,7 @@ def db():
     db_conn = DatabaseConnection(db_path)
     db_conn.connect()
 
-    migrations_dir = os.path.join(
-        os.path.dirname(__file__), '..', 'src', 'database', 'migrations'
-    )
-    mm = MigrationManager(db_conn, migrations_dir)
+    mm = MigrationManager(db_conn)
     mm.migrate()
 
     yield db_conn
