@@ -525,7 +525,7 @@ class MainWindow(QMainWindow):
             self, "About PaperTrail",
             "<h3>PaperTrail</h3>"
             "<p>arXiv Paper Management Application</p>"
-            "<p>Version 0.6.2</p>"
+            "<p>Version 0.6.3</p>"
         )
 
     def closeEvent(self, event):

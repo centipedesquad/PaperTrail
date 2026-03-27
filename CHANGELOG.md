@@ -2,9 +2,16 @@
 
 All notable changes to PaperTrail are documented in this file.
 
+## v0.6.3 — 2026-03-27
+
+### Changed
+
+- Refactored the code for migrating old databases.
+
 ## v0.6.2 — 2026-03-27
 
 ### Fixed
+
 - FTS5 author search completely broken — contentless table triggers used invalid UPDATE syntax, now use correct delete-then-reinsert with exact value matching
 - Corrupt database recovery could infinitely recurse and crash the app
 - PDF downloads could silently overwrite another paper's file on filename collision
@@ -22,6 +29,7 @@ All notable changes to PaperTrail are documented in this file.
 - Test suite updated for new batch creation return type
 
 ### Changed
+
 - `PaperRepository.create()` now only catches `sqlite3.IntegrityError` — other errors propagate
 - `create_papers_batch()` returns `{created, duplicates, errors}` dict instead of bare int
 - FTS5 triggers use BEFORE DELETE/UPDATE to ensure author data is available for exact-match deletes
@@ -29,12 +37,13 @@ All notable changes to PaperTrail are documented in this file.
 ## v0.6.1 — 2026-03-26
 
 ### Fixed
-- Crash fix for new databases
 
+- Crash fix for new databases
 
 ## v0.6.0 — 2026-03-25
 
 ### Added
+
 - Three-metric rating system (importance, comprehension, technicality) with auto-save
 - Inline note editor with auto-save and full-text search across notes
 - Full-text search powered by FTS5 across titles, abstracts, and authors
@@ -54,6 +63,7 @@ All notable changes to PaperTrail are documented in this file.
 - Comprehensive test suite (117 tests)
 
 ### Changed
+
 - Renamed application from myArXiv to PaperTrail
 - Switched from requirements.txt to pyproject.toml with uv sync
 - License changed from MIT to AGPL-3.0-only
@@ -66,6 +76,7 @@ All notable changes to PaperTrail are documented in this file.
 - Full abstract expands in-place when paper is selected
 
 ### Fixed
+
 - PDF viewer no longer blocks on database operations
 - Crash bugs and thread safety issues resolved
 - Fetch dialog progress and completion updates wired correctly

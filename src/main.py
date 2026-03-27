@@ -159,13 +159,7 @@ def initialize_database_schema(data_dir: str):
     db = initialize_database(db_path)
 
     # Run migrations
-    migrations_dir = os.path.join(
-        os.path.dirname(os.path.abspath(__file__)),
-        "database",
-        "migrations"
-    )
-
-    migration_manager = MigrationManager(db, migrations_dir)
+    migration_manager = MigrationManager(db)
 
     if migration_manager.needs_migration():
         logger.info("Running database migrations...")
