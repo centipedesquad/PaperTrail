@@ -11,7 +11,9 @@ DROP TRIGGER IF EXISTS papers_fts_update;
 DROP TRIGGER IF EXISTS papers_fts_update_authors_insert;
 DROP TRIGGER IF EXISTS papers_fts_update_authors_delete;
 
--- Drop and recreate FTS table (contentless — no content= clause)
+-- Drop and recreate FTS table as explicitly contentless (content='')
+-- The special delete syntax only works on contentless or external-content tables.
+-- We use contentless because 'authors' is computed from joins, not a real column.
 DROP TABLE IF EXISTS papers_fts;
 
 CREATE VIRTUAL TABLE IF NOT EXISTS papers_fts USING fts5(
@@ -19,6 +21,7 @@ CREATE VIRTUAL TABLE IF NOT EXISTS papers_fts USING fts5(
     title,
     abstract,
     authors,
+    content='',
     tokenize='porter'
 );
 

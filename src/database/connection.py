@@ -111,7 +111,9 @@ class DatabaseConnection:
                 os.remove(self.db_path)
             except OSError as e:
                 logger.error(f"Failed to back up corrupt database: {e}")
-                return  # Don't attempt reconnect if we can't remove the corrupt file
+                raise RuntimeError(
+                    f"Cannot recover corrupt database — failed to remove {self.db_path}: {e}"
+                ) from e
 
             # Reconnect to a fresh database (connect() will re-apply all PRAGMAs)
             self.connect()
