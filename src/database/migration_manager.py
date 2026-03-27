@@ -33,6 +33,10 @@ class MigrationManager:
                 logger.info(f"Applying migration: {migration.name}")
                 try:
                     migration.apply(conn)
+                    # Per-migration commit is intentional: executescript() implicitly
+                    # commits pending transactions, so a single wrapping transaction
+                    # is not possible. Each migration's needs_run() detects partial
+                    # state, so a retry after failure picks up where it left off.
                     conn.commit()
                     applied.append(migration.name)
                     logger.info(f"Migration {migration.name} applied successfully")
@@ -50,8 +54,8 @@ class MigrationManager:
                     (f"{len(MIGRATION_REGISTRY):03d}",)
                 )
                 conn.commit()
-            except Exception:
-                pass  # Settings table may not exist yet on error paths
+            except Exception as e:
+                logger.debug(f"Could not update schema_version in settings: {e}")
 
         final_version = self.db.get_schema_version()
         logger.info(f"Schema migration complete. Version: {final_version}, applied: {applied or 'none'}")
