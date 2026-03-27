@@ -441,6 +441,7 @@ class MainWindow(QMainWindow):
 
         self._load_categories()
         self._load_papers(self._build_current_filters())
+        self.context_panel.clear_selection()
 
     def _on_fetch_error(self, error: str):
         self._pop_wait_cursor()
@@ -453,6 +454,7 @@ class MainWindow(QMainWindow):
 
     def _refresh_papers(self):
         self._load_papers(self._build_current_filters())
+        self.context_panel.clear_selection()
         self._update_statusbar("Papers refreshed", 2000)
 
     def _start_pdf_download(self, paper, action: str):

@@ -97,8 +97,9 @@ class PDFService:
                 filename = generator.generate(paper)
                 pdf_path = os.path.join(self.pdfs_dir, filename)
             else:
-                # Use simple arxiv_id for cache
-                filename = f"{paper.arxiv_id}.pdf"
+                # Use sanitized arxiv_id for cache (legacy IDs contain '/')
+                safe_id = paper.arxiv_id.replace('/', '_')
+                filename = f"{safe_id}.pdf"
                 pdf_path = os.path.join(self.cache_dir, filename)
 
             # Download

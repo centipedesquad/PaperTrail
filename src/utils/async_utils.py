@@ -98,6 +98,10 @@ class PDFDownloadWorker(QThread):
                 self.progress.emit(100, "Cancelled")
                 return
 
+            if not result_path:
+                self.error.emit("Download failed")
+                return
+
             self.progress.emit(100, "Download complete")
             self.finished.emit(result_path)
 
