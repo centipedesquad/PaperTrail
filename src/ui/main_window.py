@@ -38,6 +38,7 @@ class MainWindow(QMainWindow):
 
         self.fetch_worker = None
         self.pdf_worker = None
+        self._cursor_override_count = 0
 
         self._setup_ui()
         self._setup_menubar()
@@ -168,6 +169,48 @@ class MainWindow(QMainWindow):
         self.config_service.set_theme(theme_name)
         self._update_statusbar(f"Switched to {theme_name} theme", 2000)
         logger.info(f"Theme toggled to: {theme_name}")
+
+    # --- Worker lifecycle helpers ---
+
+    def _cleanup_worker(self, worker_attr: str):
+        """Cancel and clean up a worker before replacing it."""
+        worker = getattr(self, worker_attr, None)
+        if worker and worker.isRunning():
+            worker.cancel()
+            worker.wait(2000)
+        if worker:
+            worker.deleteLater()
+            setattr(self, worker_attr, None)
+
+    def _stop_all_workers(self):
+        """Cancel and wait on all active workers."""
+        for attr in ['fetch_worker', 'pdf_worker']:
+            worker = getattr(self, attr, None)
+            if worker and worker.isRunning():
+                worker.cancel()
+                worker.wait(3000)
+
+    def _push_wait_cursor(self):
+        """Push a wait cursor (nestable)."""
+        self._cursor_override_count += 1
+        if self._cursor_override_count == 1:
+            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+    def _pop_wait_cursor(self):
+        """Pop a wait cursor (nestable)."""
+        if self._cursor_override_count > 0:
+            self._cursor_override_count -= 1
+            if self._cursor_override_count == 0:
+                QApplication.restoreOverrideCursor()
+
+    def _build_current_filters(self) -> dict:
+        """Build complete filter dict from filter panel + search bar state."""
+        filters = self.filter_panel.get_filters()
+        search_text = self.paper_feed.get_search_text()
+        if search_text:
+            filters['search_text'] = search_text
+        filters['sort_by'] = self.paper_feed.get_sort_key()
+        return filters
 
     # --- Data loading ---
 
@@ -363,6 +406,8 @@ class MainWindow(QMainWindow):
         self.fetch_dialog.exec()
 
     def _start_fetch(self, mode: str, categories: list, max_results: int, days: int):
+        self._cleanup_worker('fetch_worker')
+
         if mode == "new":
             fetch_func = lambda: self.fetch_service.fetch_new_papers(categories, max_results)
         else:
@@ -374,7 +419,7 @@ class MainWindow(QMainWindow):
         self.fetch_worker.error.connect(self._on_fetch_error)
         self.fetch_worker.start()
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        self._push_wait_cursor()
         self._update_statusbar("Fetching papers...")
 
     def _on_fetch_progress(self, percentage: int, message: str):
@@ -383,7 +428,7 @@ class MainWindow(QMainWindow):
             self.fetch_dialog.set_progress(percentage, message)
 
     def _on_fetch_finished(self, result: dict):
-        QApplication.restoreOverrideCursor()
+        self._pop_wait_cursor()
         self._update_statusbar(
             f"Fetched {result['created']} new papers ({result['duplicates']} duplicates)", 5000
         )
@@ -392,11 +437,10 @@ class MainWindow(QMainWindow):
             self.fetch_dialog.fetch_complete(result)
 
         self._load_categories()
-        filters = self.filter_panel.get_filters()
-        self._load_papers(filters)
+        self._load_papers(self._build_current_filters())
 
     def _on_fetch_error(self, error: str):
-        QApplication.restoreOverrideCursor()
+        self._pop_wait_cursor()
         self._update_statusbar("Fetch failed", 5000)
 
         if hasattr(self, 'fetch_dialog') and self.fetch_dialog:
@@ -405,11 +449,11 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Fetch Error", f"Failed to fetch papers:\n\n{error}")
 
     def _refresh_papers(self):
-        filters = self.filter_panel.get_filters()
-        self._load_papers(filters)
+        self._load_papers(self._build_current_filters())
         self._update_statusbar("Papers refreshed", 2000)
 
     def _start_pdf_download(self, paper, action: str):
+        self._cleanup_worker('pdf_worker')
         permanent = (action == "download")
 
         def download_func(progress_callback):
@@ -421,14 +465,14 @@ class MainWindow(QMainWindow):
         self.pdf_worker.finished.connect(lambda path, pid=paper_id: self._on_pdf_finished(pid, path))
         self.pdf_worker.error.connect(self._on_pdf_error)
         self.pdf_worker.start()
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        self._push_wait_cursor()
         self._update_statusbar("Downloading PDF...")
 
     def _on_pdf_progress(self, percentage: int, message: str):
         self._update_statusbar(message)
 
     def _on_pdf_finished(self, paper_id: int, pdf_path: str):
-        QApplication.restoreOverrideCursor()
+        self._pop_wait_cursor()
         self._update_statusbar("Download complete, opening PDF...", 2000)
         paper = self.paper_service.get_paper(paper_id)
         if not paper:
@@ -441,7 +485,7 @@ class MainWindow(QMainWindow):
         self.context_panel.set_paper(paper)
 
     def _on_pdf_error(self, error: str):
-        QApplication.restoreOverrideCursor()
+        self._pop_wait_cursor()
         self._update_statusbar("PDF download failed", 5000)
         QMessageBox.critical(self, "Download Error", f"Failed to download PDF:\n\n{error}")
 
@@ -463,6 +507,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         logger.info("Closing main window")
+        self._stop_all_workers()
         try:
             deleted = self.pdf_service.cleanup_cache()
             logger.info(f"Cleaned up {deleted} cached PDF files")
