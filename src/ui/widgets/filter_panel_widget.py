@@ -342,11 +342,10 @@ class FilterPanelWidget(QWidget):
             self.category_items[f"cat_{code}"] = item
             shown += 1
 
-        # Restore selections that still exist
-        for code in old_selected:
-            key = f"cat_{code}"
+        # Restore selections that still exist (old_selected contains prefixed keys like "cat_cs.AI")
+        for key in old_selected:
             if key in self.category_items:
-                self._selected_categories.add(code)
+                self._selected_categories.add(key)
                 self.category_items[key].set_active(True)
         if self._selected_categories:
             self.clear_cats_item.setVisible(True)
