@@ -177,7 +177,10 @@ class MainWindow(QMainWindow):
         worker = getattr(self, worker_attr, None)
         if worker and worker.isRunning():
             worker.cancel()
-            worker.wait(2000)
+            if not worker.wait(2000):
+                # Thread didn't stop — don't destroy it, let it finish naturally
+                logger.warning(f"Worker {worker_attr} did not stop in time, skipping cleanup")
+                return
         if worker:
             worker.deleteLater()
             setattr(self, worker_attr, None)
@@ -481,8 +484,10 @@ class MainWindow(QMainWindow):
         success = self.pdf_service.open_pdf(paper, pdf_path)
         if not success:
             QMessageBox.critical(self, "Error", "PDF downloaded but failed to open.")
-        # Refresh context panel to show updated PDF status
-        self.context_panel.set_paper(paper)
+        # Re-fetch to reflect last_accessed update from open_pdf
+        paper = self.paper_service.get_paper(paper_id)
+        if paper:
+            self.context_panel.set_paper(paper)
 
     def _on_pdf_error(self, error: str):
         self._pop_wait_cursor()
