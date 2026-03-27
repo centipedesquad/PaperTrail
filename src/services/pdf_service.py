@@ -96,6 +96,12 @@ class PDFService:
                 generator = FilenameGenerator(pattern)
                 filename = generator.generate(paper)
                 pdf_path = os.path.join(self.pdfs_dir, filename)
+                # Avoid overwriting a different paper's file
+                if os.path.exists(pdf_path):
+                    base, ext = os.path.splitext(filename)
+                    safe_id = paper.arxiv_id.replace('/', '_')
+                    filename = f"{base}_{safe_id}{ext}"
+                    pdf_path = os.path.join(self.pdfs_dir, filename)
             else:
                 # Use sanitized arxiv_id for cache (legacy IDs contain '/')
                 safe_id = paper.arxiv_id.replace('/', '_')
