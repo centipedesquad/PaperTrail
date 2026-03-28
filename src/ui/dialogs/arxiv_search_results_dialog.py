@@ -101,7 +101,7 @@ class ArxivSearchResultsDialog(QDialog):
         self.import_btn.setEnabled(False)
         self.import_btn.setStyleSheet(
             f"background-color: {theme.get_color('primary')}; "
-            f"color: {theme.get_color('primary_text')}; "
+            f"color: {theme.get_color('text_primary')}; "
             f"border-radius: 2px; padding: 6px 16px;"
         )
         self.import_btn.clicked.connect(self._on_import)

@@ -353,7 +353,7 @@ class PaperFeedWidget(QWidget):
         import_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: {theme.get_color('primary')};
-                color: {theme.get_color('primary_text')};
+                color: {theme.get_color('text_primary')};
                 border-radius: 2px;
                 padding: 8px 20px;
                 border: none;

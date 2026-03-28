@@ -225,7 +225,8 @@ class MainWindow(QMainWindow):
 
     def _stop_all_workers(self):
         """Cancel and wait on all active workers."""
-        for attr in ['fetch_worker', 'pdf_worker']:
+        for attr in ['fetch_worker', 'pdf_worker', 'source_worker',
+                      'arxiv_id_worker', 'arxiv_search_worker']:
             worker = getattr(self, attr, None)
             if worker and worker.isRunning():
                 worker.cancel()
@@ -406,6 +407,7 @@ class MainWindow(QMainWindow):
 
         self._search_generation += 1
         gen = self._search_generation
+        self._cleanup_worker('arxiv_id_worker')
         self.arxiv_id_worker = ArxivIdWorker(
             self.fetch_service.fetch_by_arxiv_id_preview, arxiv_id
         )
@@ -456,20 +458,25 @@ class MainWindow(QMainWindow):
     def _on_arxiv_search_requested(self, query: str):
         """Handle 'Search arXiv' button click from fallback indicator."""
         self._cancel_arxiv_workers()
+        self._cleanup_worker('arxiv_search_worker')
         self.paper_feed.show_loading("Searching arXiv...")
         self._update_statusbar(f"Searching arXiv for '{query}'...")
 
+        self._search_generation += 1
+        gen = self._search_generation
         self.arxiv_search_worker = ArxivSearchWorker(
             self.fetch_service.search_arxiv, query, 50
         )
         self.arxiv_search_worker.finished.connect(
-            lambda results: self._on_arxiv_search_results(query, results)
+            lambda results, g=gen: self._on_arxiv_search_results(query, results, g)
         )
         self.arxiv_search_worker.error.connect(self._on_arxiv_search_error)
         self.arxiv_search_worker.start()
 
-    def _on_arxiv_search_results(self, query: str, results: list):
+    def _on_arxiv_search_results(self, query: str, results: list, generation: int):
         """Handle arXiv search results — open picker dialog."""
+        if generation != self._search_generation:
+            return  # stale result
         if not results:
             self.paper_feed.show_error_message(
                 f'No papers found on arXiv for "{query}".\nTry different search terms.'
@@ -500,7 +507,7 @@ class MainWindow(QMainWindow):
 
             # Refresh feed and categories
             self._load_categories()
-            self._load_papers()
+            self._load_papers(self._build_current_filters())
         except Exception as e:
             logger.error(f"Batch import failed: {e}")
             QMessageBox.critical(self, "Import Error", f"Failed to import papers:\n\n{str(e)}")
@@ -624,6 +631,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Error", f"Failed to view source:\n\n{str(e)}")
 
     def _start_source_download(self, paper, permanent: bool):
+        self._cleanup_worker('source_worker')
         self.source_worker = SourceDownloadWorker(
             self.source_service.download_source, paper, permanent
         )
@@ -634,22 +642,28 @@ class MainWindow(QMainWindow):
         )
         self.source_worker.error.connect(self._on_source_error)
         self.source_worker.start()
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        self._push_wait_cursor()
         self._update_statusbar("Downloading source files...")
 
     def _on_source_progress(self, percentage: int, message: str):
         self._update_statusbar(message)
 
     def _on_source_finished(self, paper_id: int, source_path: str):
-        QApplication.restoreOverrideCursor()
+        self._pop_wait_cursor()
         self._update_statusbar("Source files ready", 3000)
+        # Open the downloaded path directly (works for both permanent and stream mode)
+        import subprocess, sys
+        if sys.platform == 'darwin':
+            subprocess.Popen(['open', source_path])
+        else:
+            subprocess.Popen(['xdg-open', source_path])
+        # Refresh context panel
         paper = self.paper_service.get_paper(paper_id)
         if paper:
-            self.source_service.open_source(paper)
             self.context_panel.set_paper(paper)
 
     def _on_source_error(self, error: str):
-        QApplication.restoreOverrideCursor()
+        self._pop_wait_cursor()
         self._update_statusbar("Source download failed", 5000)
         QMessageBox.critical(self, "Source Error", f"Failed to download source files:\n\n{error}")
 
