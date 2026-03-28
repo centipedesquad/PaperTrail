@@ -63,7 +63,8 @@ class SourceService:
         try:
             url = self.get_source_url(paper)
             dest_dir = self.sources_dir if permanent else self.cache_dir
-            extract_dir = os.path.join(dest_dir, paper.arxiv_id)
+            safe_id = paper.arxiv_id.replace('/', '_')
+            extract_dir = os.path.join(dest_dir, safe_id)
 
             # Download to a temp file first
             with tempfile.NamedTemporaryFile(

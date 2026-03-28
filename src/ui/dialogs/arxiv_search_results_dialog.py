@@ -101,7 +101,7 @@ class ArxivSearchResultsDialog(QDialog):
         self.import_btn.setEnabled(False)
         self.import_btn.setStyleSheet(
             f"background-color: {theme.get_color('primary')}; "
-            f"color: {theme.get_color('text_primary')}; "
+            f"color: white; "
             f"border-radius: 2px; padding: 6px 16px;"
         )
         self.import_btn.clicked.connect(self._on_import)
@@ -175,7 +175,7 @@ class ArxivSearchResultsDialog(QDialog):
         return row
 
     def _on_select_all_changed(self, state):
-        checked = state == Qt.CheckState.Checked.value
+        checked = bool(state)
         for cb in self.checkboxes:
             cb.blockSignals(True)
             cb.setChecked(checked)

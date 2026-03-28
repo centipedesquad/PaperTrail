@@ -508,6 +508,7 @@ class MainWindow(QMainWindow):
             # Refresh feed and categories
             self._load_categories()
             self._load_papers(self._build_current_filters())
+            self.context_panel.clear_selection()
         except Exception as e:
             logger.error(f"Batch import failed: {e}")
             QMessageBox.critical(self, "Import Error", f"Failed to import papers:\n\n{str(e)}")
@@ -652,11 +653,17 @@ class MainWindow(QMainWindow):
         self._pop_wait_cursor()
         self._update_statusbar("Source files ready", 3000)
         # Open the downloaded path directly (works for both permanent and stream mode)
-        import subprocess, sys
-        if sys.platform == 'darwin':
-            subprocess.Popen(['open', source_path])
-        else:
-            subprocess.Popen(['xdg-open', source_path])
+        import subprocess, sys, os
+        try:
+            if os.path.exists(source_path):
+                if sys.platform == 'darwin':
+                    subprocess.Popen(['open', source_path])
+                else:
+                    subprocess.Popen(['xdg-open', source_path])
+            else:
+                logger.error(f"Source path not found: {source_path}")
+        except Exception as e:
+            logger.error(f"Failed to open source directory: {e}")
         # Refresh context panel
         paper = self.paper_service.get_paper(paper_id)
         if paper:
