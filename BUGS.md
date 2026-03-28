@@ -28,7 +28,7 @@ Bugs found by **[BOTH]** models are highest confidence.
 **Severity:** High — Silent partial migration
 **Found by:** Codex (round 4)
 
-`migration_manager.py` runs migrations with `executescript()` and treats "duplicate column name" as success. If a migration partially applies, the manager may still advance the schema version.
+`migration_manager.py` runs migrations with `executescript()` and treats "duplicate column name" as success. If a migration partially applies (column added but index/version update skipped), the manager may still advance the schema version.
 
 **Fix:** Make each SQL file idempotent or wrap in explicit transaction/savepoint.
 
@@ -42,7 +42,7 @@ Bugs found by **[BOTH]** models are highest confidence.
 **Severity:** High — FTS5 delete may miss rows with different author ordering
 **Found by:** Codex (round 4)
 
-`GROUP_CONCAT(a.name, ' ') ... ORDER BY pa.author_order` in the same aggregate query does not guarantee order in SQLite. The delete command requires exact value match, so ordering drift can leave stale FTS entries.
+`GROUP_CONCAT(a.name, ' ') ... ORDER BY pa.author_order` inside the same aggregate query does not guarantee order in SQLite. The delete command requires exact value match, so author ordering drift can leave stale FTS entries.
 
 **Fix:** Use ordered subquery: `GROUP_CONCAT(name, ' ') FROM (SELECT ... ORDER BY author_order)`.
 
@@ -105,6 +105,11 @@ Bugs found by **[BOTH]** models are highest confidence.
 **Fix:** Use `COALESCE(excluded.importance, importance)` in the ON CONFLICT clause so NULL parameters preserve existing values, or read-then-merge in Python.
 
 **Files:** `src/database/repositories.py` — `RatingsRepository.create_or_update()` (line ~546)
+`_cleanup_worker()` gives up after 2s timeout, but callers overwrite the worker attribute with a new thread. The old thread keeps signal connections and can later pop dialogs, mutate the feed, or open files from a stale operation.
+
+**Fix:** Return success/failure from cleanup and refuse replacement until old worker is fully disconnected.
+
+**Files:** `src/ui/main_window.py` — `_cleanup_worker()` (line ~213), `src/utils/async_utils.py`
 
 ---
 
@@ -159,6 +164,7 @@ Bugs found by **[BOTH]** models are highest confidence.
 **Found by:** Codex (round 4)
 
 When a download finishes, the context panel always reloads the paper that initiated it. If user selected a different paper while waiting, the UI jumps back.
+When a PDF/source download finishes, the context panel always reloads the paper that initiated the download. If the user selected a different paper while waiting, the UI jumps back.
 
 **Fix:** Only refresh context panel if the finished paper is still the selected one.
 
