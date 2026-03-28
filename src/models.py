@@ -18,6 +18,7 @@ class Paper:
     publication_date: str = ""
     pdf_url: str = ""
     local_pdf_path: Optional[str] = None
+    local_source_path: Optional[str] = None
     version: Optional[str] = None
     comment: Optional[str] = None
     journal_ref: Optional[str] = None

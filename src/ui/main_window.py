@@ -3,6 +3,7 @@ Main window for PaperTrail application.
 Three-column layout: nav rail | paper feed | context panel.
 """
 
+import re
 import logging
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -16,21 +17,36 @@ from ui.widgets.filter_panel_widget import FilterPanelWidget
 from ui.widgets.context_panel_widget import ContextPanelWidget
 from ui.dialogs.fetch_papers_dialog import FetchPapersDialog
 from ui.dialogs.pdf_action_dialog import PDFActionDialog
-from utils.async_utils import FetchWorker, PDFDownloadWorker
+from ui.dialogs.arxiv_search_results_dialog import ArxivSearchResultsDialog
+from utils.async_utils import (
+    FetchWorker, PDFDownloadWorker, ArxivIdWorker,
+    ArxivSearchWorker, SourceDownloadWorker
+)
 from ui.theme import get_theme_manager, ThemeMode
 
 logger = logging.getLogger(__name__)
+
+# arXiv ID pattern: new format (2301.07041) or old format (hep-th/9901001), optional prefix/version
+ARXIV_ID_PATTERN = re.compile(
+    r'^(?:arxiv:)?'
+    r'(\d{4}\.\d{4,5}'
+    r'|[a-z-]+/\d{7})'
+    r'(?:v\d+)?$',
+    re.IGNORECASE
+)
 
 
 class MainWindow(QMainWindow):
     """Main application window with three-column layout."""
 
-    def __init__(self, config_service, paper_service, fetch_service, pdf_service):
+    def __init__(self, config_service, paper_service, fetch_service, pdf_service,
+                 source_service=None):
         super().__init__()
         self.config_service = config_service
         self.paper_service = paper_service
         self.fetch_service = fetch_service
         self.pdf_service = pdf_service
+        self.source_service = source_service
 
         self.setWindowTitle("PaperTrail")
         self.setMinimumSize(1000, 700)
@@ -38,6 +54,9 @@ class MainWindow(QMainWindow):
 
         self.fetch_worker = None
         self.pdf_worker = None
+        self.arxiv_id_worker = None
+        self.arxiv_search_worker = None
+        self.source_worker = None
         self._cursor_override_count = 0
 
         self._setup_ui()
@@ -78,6 +97,8 @@ class MainWindow(QMainWindow):
         self.paper_feed.paper_selected.connect(self._on_paper_selected)
         self.paper_feed.search_requested.connect(self._on_search_requested)
         self.paper_feed.sort_changed.connect(self._on_sort_changed)
+        self.paper_feed.arxiv_search_requested.connect(self._on_arxiv_search_requested)
+        self.paper_feed.import_paper_requested.connect(self._on_import_paper_requested)
         splitter.addWidget(self.paper_feed)
 
         # Right: Context panel (240px)
@@ -86,6 +107,8 @@ class MainWindow(QMainWindow):
         self.context_panel.setMaximumWidth(420)
         self.context_panel.view_pdf_requested.connect(self._on_view_pdf)
         self.context_panel.delete_pdf_requested.connect(self._on_delete_pdf)
+        self.context_panel.view_source_requested.connect(self._on_view_source)
+        self.context_panel.delete_source_requested.connect(self._on_delete_source)
         self.context_panel.rating_changed.connect(self._on_rating_changed)
         self.context_panel.note_changed.connect(self._on_note_changed)
         splitter.addWidget(self.context_panel)
@@ -304,12 +327,172 @@ class MainWindow(QMainWindow):
             self.context_panel.set_paper(full_paper)
 
     def _on_search_requested(self, search_text: str):
-        """Handle search from the feed search bar."""
+        """Handle search from the feed search bar with arXiv fallback."""
+        # Cancel any in-flight arXiv workers
+        self._cancel_arxiv_workers()
+
+        if not search_text:
+            # Empty search — restore default feed
+            self._load_papers()
+            return
+
+        # Check if input is an arXiv ID
+        match = ARXIV_ID_PATTERN.match(search_text.strip())
+        if match:
+            arxiv_id = match.group(1)
+            self._search_by_arxiv_id(arxiv_id)
+            return
+
+        # General text search — try local first
         filters = self.filter_panel.get_filters()
-        if search_text:
-            filters['search_text'] = search_text
+        filters['search_text'] = search_text
         filters['sort_by'] = self.paper_feed.get_sort_key()
-        self._load_papers(filters)
+
+        try:
+            papers = self.paper_service.search_papers(
+                search_text=filters.get('search_text'),
+                categories=filters.get('categories'),
+                date_from=filters.get('date_from'),
+                date_to=filters.get('date_to'),
+                has_pdf=filters.get('has_pdf'),
+                has_rating=filters.get('has_rating'),
+                sort_by=filters.get('sort_by', 'date_desc'),
+                limit=100
+            )
+
+            if papers:
+                self.paper_feed.set_papers(papers)
+                self._update_statusbar(f"{len(papers)} papers found")
+            else:
+                # No local results — check if filters are active
+                has_active_filters = any(
+                    v for k, v in filters.items()
+                    if k not in ('search_text', 'sort_by') and v
+                )
+                if has_active_filters:
+                    self.paper_feed.show_filtered_empty()
+                else:
+                    self.paper_feed.show_arxiv_fallback(search_text)
+
+        except Exception as e:
+            logger.error(f"Search failed: {e}")
+            self.paper_feed.show_error_message(f"Search error: {e}")
+
+    def _search_by_arxiv_id(self, arxiv_id: str):
+        """Handle arXiv ID search: check local first, then fetch preview from arXiv."""
+        # Strip version suffix for local lookup
+        base_id = re.sub(r'v\d+$', '', arxiv_id, flags=re.IGNORECASE)
+
+        local_paper = self.paper_service.get_paper_by_arxiv_id(base_id)
+        if local_paper:
+            # Found locally — show it in feed and select it
+            self.paper_feed.set_papers([local_paper])
+            self.context_panel.set_paper(local_paper)
+            self._update_statusbar(f"Found in library: {base_id}")
+            return
+
+        # Not local — fetch preview from arXiv (no DB save)
+        self.paper_feed.show_loading("Fetching paper from arXiv...")
+        self._update_statusbar(f"Looking up {arxiv_id} on arXiv...")
+
+        self.arxiv_id_worker = ArxivIdWorker(
+            self.fetch_service.fetch_by_arxiv_id_preview, arxiv_id
+        )
+        self.arxiv_id_worker.finished.connect(self._on_arxiv_id_result)
+        self.arxiv_id_worker.error.connect(self._on_arxiv_id_error)
+        self.arxiv_id_worker.start()
+
+    def _on_arxiv_id_result(self, paper_data):
+        """Handle arXiv ID lookup result — show preview card."""
+        if paper_data:
+            try:
+                self.paper_feed.show_arxiv_preview(paper_data)
+                self._update_statusbar("Paper found on arXiv", 3000)
+            except Exception as e:
+                logger.error(f"Failed to display arXiv preview: {e}")
+                self.paper_feed.show_error_message(f"Error displaying paper: {e}")
+        else:
+            self.paper_feed.show_error_message("Paper not found on arXiv")
+            self._update_statusbar("Paper not found on arXiv", 3000)
+
+    def _on_arxiv_id_error(self, error: str):
+        self.paper_feed.show_error_message(f"Could not reach arXiv: {error}")
+        self._update_statusbar("arXiv lookup failed", 3000)
+
+    def _on_import_paper_requested(self, paper_data: dict):
+        """Handle 'Import to Library' button from preview card."""
+        try:
+            paper_id = self.paper_service.create_paper(paper_data)
+            if paper_id:
+                self._update_statusbar("Paper imported to library", 3000)
+                # Reload and show the imported paper
+                paper = self.paper_service.get_paper(paper_id)
+                if paper:
+                    self.paper_feed.set_papers([paper])
+                    self.context_panel.set_paper(paper)
+                self._load_categories()
+            else:
+                self._update_statusbar("Paper already in library", 3000)
+        except Exception as e:
+            logger.error(f"Failed to import paper: {e}")
+            QMessageBox.critical(self, "Import Error", f"Failed to import paper:\n\n{str(e)}")
+
+    def _on_arxiv_search_requested(self, query: str):
+        """Handle 'Search arXiv' button click from fallback indicator."""
+        self._cancel_arxiv_workers()
+        self.paper_feed.show_loading("Searching arXiv...")
+        self._update_statusbar(f"Searching arXiv for '{query}'...")
+
+        self.arxiv_search_worker = ArxivSearchWorker(
+            self.fetch_service.search_arxiv, query, 50
+        )
+        self.arxiv_search_worker.finished.connect(
+            lambda results: self._on_arxiv_search_results(query, results)
+        )
+        self.arxiv_search_worker.error.connect(self._on_arxiv_search_error)
+        self.arxiv_search_worker.start()
+
+    def _on_arxiv_search_results(self, query: str, results: list):
+        """Handle arXiv search results — open picker dialog."""
+        if not results:
+            self.paper_feed.show_error_message(
+                f'No papers found on arXiv for "{query}".\nTry different search terms.'
+            )
+            self._update_statusbar("No arXiv results", 3000)
+            return
+
+        dialog = ArxivSearchResultsDialog(query, results, self)
+        dialog.import_requested.connect(self._on_batch_import)
+        dialog.exec()
+
+    def _on_arxiv_search_error(self, error: str):
+        self.paper_feed.show_error_message(f"Could not reach arXiv.\n{error}")
+        self._update_statusbar("arXiv search failed", 3000)
+
+    def _on_batch_import(self, selected_papers: list):
+        """Import selected papers from the picker dialog."""
+        try:
+            result = self.fetch_service.import_papers(selected_papers)
+            imported = result['imported']
+            duplicates = result['duplicates']
+            parts = [f"Imported {imported} papers"]
+            if duplicates > 0:
+                parts.append(f"{duplicates} duplicates skipped")
+            self._update_statusbar(", ".join(parts), 5000)
+
+            # Refresh feed and categories
+            self._load_categories()
+            self._load_papers()
+        except Exception as e:
+            logger.error(f"Batch import failed: {e}")
+            QMessageBox.critical(self, "Import Error", f"Failed to import papers:\n\n{str(e)}")
+
+    def _cancel_arxiv_workers(self):
+        """Cancel any in-flight arXiv workers."""
+        if self.arxiv_id_worker and self.arxiv_id_worker.isRunning():
+            self.arxiv_id_worker.cancel()
+        if self.arxiv_search_worker and self.arxiv_search_worker.isRunning():
+            self.arxiv_search_worker.cancel()
 
     def _on_sort_changed(self, sort_key: str):
         """Handle sort change from the feed."""
@@ -389,6 +572,94 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Error deleting PDF: {e}")
             QMessageBox.critical(self, "Error", f"Failed to delete PDF:\n\n{str(e)}")
+
+    # --- Source file actions ---
+
+    def _on_view_source(self, paper_id: int):
+        """Handle 'Download Source' button from context panel."""
+        if not self.source_service:
+            QMessageBox.warning(self, "Error", "Source service not available.")
+            return
+        try:
+            paper = self.paper_service.get_paper(paper_id)
+            if not paper:
+                return
+
+            if self.source_service.has_local_source(paper):
+                self.source_service.open_source(paper)
+                self._update_statusbar("Source folder opened", 3000)
+                return
+
+            # Ask download or stream
+            dialog = PDFActionDialog(paper.title, self)
+            dialog.setWindowTitle("Download Source")
+            result = dialog.exec()
+            if result != QDialog.Accepted:
+                return
+            action = dialog.get_action()
+            permanent = (action == "download")
+
+            self._start_source_download(paper, permanent)
+
+        except Exception as e:
+            logger.error(f"Error viewing source: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to view source:\n\n{str(e)}")
+
+    def _start_source_download(self, paper, permanent: bool):
+        self.source_worker = SourceDownloadWorker(
+            self.source_service.download_source, paper, permanent
+        )
+        self.source_worker.progress.connect(self._on_source_progress)
+        self.source_worker.finished.connect(lambda path: self._on_source_finished(paper, path))
+        self.source_worker.error.connect(self._on_source_error)
+        self.source_worker.start()
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        self._update_statusbar("Downloading source files...")
+
+    def _on_source_progress(self, percentage: int, message: str):
+        self._update_statusbar(message)
+
+    def _on_source_finished(self, paper, source_path: str):
+        QApplication.restoreOverrideCursor()
+        self._update_statusbar("Source files ready", 3000)
+        self.source_service.open_source(paper)
+        # Refresh context panel
+        full_paper = self.paper_service.get_paper(paper.id)
+        if full_paper:
+            self.context_panel.set_paper(full_paper)
+
+    def _on_source_error(self, error: str):
+        QApplication.restoreOverrideCursor()
+        self._update_statusbar("Source download failed", 5000)
+        QMessageBox.critical(self, "Source Error", f"Failed to download source files:\n\n{error}")
+
+    def _on_delete_source(self, paper_id: int):
+        if not self.source_service:
+            return
+        try:
+            paper = self.paper_service.get_paper(paper_id)
+            if not paper or not self.source_service.has_local_source(paper):
+                self._update_statusbar("No local source to delete", 3000)
+                return
+
+            reply = QMessageBox.question(
+                self, "Delete Source",
+                f"Delete the local source files for:\n\n{paper.title}",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+            if self.source_service.delete_source(paper):
+                self._update_statusbar("Source files deleted", 3000)
+                full_paper = self.paper_service.get_paper(paper_id)
+                if full_paper:
+                    self.context_panel.set_paper(full_paper)
+            else:
+                QMessageBox.critical(self, "Error", "Failed to delete source files.")
+        except Exception as e:
+            logger.error(f"Error deleting source: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to delete source:\n\n{str(e)}")
 
     def _on_rating_changed(self, paper_id: int, importance: str, comprehension: str, technicality: str):
         try:
@@ -536,4 +807,10 @@ class MainWindow(QMainWindow):
             logger.info(f"Cleaned up {deleted} cached PDF files")
         except Exception as e:
             logger.error(f"Failed to cleanup cache: {e}")
+        try:
+            if self.source_service:
+                deleted = self.source_service.cleanup_cache()
+                logger.info(f"Cleaned up {deleted} cached source items")
+        except Exception as e:
+            logger.error(f"Failed to cleanup source cache: {e}")
         event.accept()

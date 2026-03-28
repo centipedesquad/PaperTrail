@@ -175,6 +175,14 @@ class PaperRepository:
         )
         # auto-committed by execute()
 
+    def update_local_source_path(self, paper_id: int, source_path: str):
+        """Update local source path for a paper."""
+        self.db.execute(
+            "UPDATE papers SET local_source_path = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (source_path, paper_id)
+        )
+        self.db.commit()
+
     def update_last_accessed(self, paper_id: int):
         """Update last accessed timestamp."""
         self.db.execute(
@@ -374,6 +382,7 @@ class PaperRepository:
             publication_date=row['publication_date'],
             pdf_url=row['pdf_url'],
             local_pdf_path=row['local_pdf_path'],
+            local_source_path=row['local_source_path'] if 'local_source_path' in row.keys() else None,
             version=row['version'],
             comment=row['comment'],
             journal_ref=row['journal_ref'],

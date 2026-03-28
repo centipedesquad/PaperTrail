@@ -165,6 +165,57 @@ class FetchService:
             logger.error(f"Failed to fetch paper {arxiv_id}: {e}")
             return None
 
+    def fetch_by_arxiv_id_preview(self, arxiv_id: str) -> Optional[dict]:
+        """
+        Fetch paper metadata from arXiv by ID WITHOUT saving to database.
+        Used for preview-then-import flow.
+
+        Returns:
+            Paper data dictionary or None
+        """
+        try:
+            return self.arxiv_client.fetch_by_arxiv_id(arxiv_id)
+        except Exception as e:
+            logger.error(f"Failed to fetch paper preview {arxiv_id}: {e}")
+            return None
+
+    def search_arxiv(self, query: str, max_results: int = 50) -> list:
+        """
+        Search arXiv for papers matching a query string.
+        Distinct from PaperService.search_papers() which searches local DB.
+
+        Args:
+            query: Search query (supports arXiv query syntax)
+            max_results: Maximum number of results
+
+        Returns:
+            List of paper data dictionaries
+        """
+        try:
+            results = self.arxiv_client.search_papers(query, max_results=max_results)
+            logger.info(f"arXiv search for '{query}': {len(results)} results")
+            return results
+        except Exception as e:
+            logger.error(f"arXiv search failed for '{query}': {e}")
+            return []
+
+    def import_papers(self, paper_data_list: list) -> dict:
+        """
+        Import multiple papers into the database.
+
+        Returns:
+            dict with 'imported' count and 'duplicates' count
+        """
+        imported = 0
+        duplicates = 0
+        for paper_data in paper_data_list:
+            paper_id = self.paper_service.create_paper(paper_data)
+            if paper_id:
+                imported += 1
+            else:
+                duplicates += 1
+        return {'imported': imported, 'duplicates': duplicates}
+
     def _fetch_with_retry(self, fetch_func, max_retries: int = 3, base_delay: float = 1.0):
         """Call fetch_func with exponential backoff retry for transient errors.
 

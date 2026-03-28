@@ -202,3 +202,111 @@ class SearchWorker(QThread):
         except Exception as e:
             logger.error(f"Search worker error: {e}")
             self.error.emit(str(e))
+
+
+class ArxivIdWorker(QThread):
+    """Background worker for fetching a single paper by arXiv ID (preview, no DB save)."""
+
+    finished = Signal(object)  # Paper data dict or None
+    error = Signal(str)
+
+    def __init__(self, fetch_func: Callable, arxiv_id: str):
+        super().__init__()
+        self.fetch_func = fetch_func
+        self.arxiv_id = arxiv_id
+        self._is_cancelled = False
+
+    def run(self):
+        try:
+            if self._is_cancelled:
+                return
+            result = self.fetch_func(self.arxiv_id)
+            if not self._is_cancelled:
+                self.finished.emit(result)
+        except Exception as e:
+            logger.error(f"ArxivIdWorker error: {e}")
+            if not self._is_cancelled:
+                self.error.emit(str(e))
+
+    def cancel(self):
+        self._is_cancelled = True
+
+
+class ArxivSearchWorker(QThread):
+    """Background worker for searching arXiv (general query, returns list of dicts)."""
+
+    finished = Signal(list)  # List of paper data dicts
+    error = Signal(str)
+
+    def __init__(self, search_func: Callable, query: str, max_results: int = 50):
+        super().__init__()
+        self.search_func = search_func
+        self.query = query
+        self.max_results = max_results
+        self._is_cancelled = False
+
+    def run(self):
+        try:
+            if self._is_cancelled:
+                return
+            results = self.search_func(self.query, self.max_results)
+            if not self._is_cancelled:
+                self.finished.emit(results)
+        except Exception as e:
+            logger.error(f"ArxivSearchWorker error: {e}")
+            if not self._is_cancelled:
+                self.error.emit(str(e))
+
+    def cancel(self):
+        self._is_cancelled = True
+
+
+class SourceDownloadWorker(QThread):
+    """Background worker for downloading and extracting source files."""
+
+    progress = Signal(int, str)  # (percentage, status_message)
+    finished = Signal(str)  # Path to extracted directory
+    error = Signal(str)
+
+    def __init__(self, download_func: Callable, paper, permanent: bool = True):
+        super().__init__()
+        self.download_func = download_func
+        self.paper = paper
+        self.permanent = permanent
+        self._is_cancelled = False
+
+    def run(self):
+        try:
+            self.progress.emit(0, "Downloading source files...")
+
+            def progress_callback(current: int, total: int):
+                if self._is_cancelled:
+                    raise InterruptedError("Download cancelled")
+                if total > 0:
+                    percentage = min(int((current / total) * 90), 90)
+                    self.progress.emit(percentage, f"Downloading: {current}/{total} bytes")
+
+            result_path = self.download_func(
+                self.paper,
+                permanent=self.permanent,
+                progress_callback=progress_callback
+            )
+
+            if self._is_cancelled:
+                return
+
+            if result_path:
+                self.progress.emit(100, "Source files ready")
+                self.finished.emit(result_path)
+            else:
+                self.error.emit("Source files not available for this paper")
+
+        except InterruptedError:
+            logger.info("Source download cancelled")
+            self.error.emit("Download cancelled")
+        except Exception as e:
+            logger.error(f"Source download worker error: {e}")
+            self.error.emit(str(e))
+
+    def cancel(self):
+        self._is_cancelled = True

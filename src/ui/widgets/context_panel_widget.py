@@ -25,6 +25,8 @@ class ContextPanelWidget(QWidget):
     # Signals
     view_pdf_requested = Signal(int)   # paper_id
     delete_pdf_requested = Signal(int) # paper_id
+    view_source_requested = Signal(int)   # paper_id
+    delete_source_requested = Signal(int) # paper_id
     rating_changed = Signal(int, str, str, str)  # paper_id, importance, comprehension, technicality
     note_changed = Signal(int, str)    # paper_id, note_text
 
@@ -131,6 +133,26 @@ class ContextPanelWidget(QWidget):
 
         detail_layout.addSpacing(16)
 
+        # Section: Source
+        detail_layout.addWidget(self._make_section_heading("Source"))
+
+        self.source_status_label = QLabel()
+        self.source_status_label.setStyleSheet(f"border: none; margin-bottom: 8px;")
+        detail_layout.addWidget(self.source_status_label)
+
+        self.source_button = QPushButton("Download Source")
+        self.source_button.setStyleSheet(theme.get_widget_style('button_primary'))
+        self.source_button.clicked.connect(self._on_view_source)
+        detail_layout.addWidget(self.source_button)
+
+        self.delete_source_button = QPushButton("Delete Source")
+        self.delete_source_button.setStyleSheet(theme.get_widget_style('button_secondary'))
+        self.delete_source_button.clicked.connect(self._on_delete_source)
+        self.delete_source_button.setVisible(False)
+        detail_layout.addWidget(self.delete_source_button)
+
+        detail_layout.addSpacing(16)
+
         # Section: Notes
         detail_layout.addWidget(self._make_section_heading("Notes"))
 
@@ -224,6 +246,30 @@ class ContextPanelWidget(QWidget):
             self.pdf_button.setText("View PDF")
             self.delete_pdf_button.setVisible(False)
 
+        # Source status
+        has_source = paper.local_source_path and os.path.exists(paper.local_source_path)
+        if has_source:
+            self.source_status_label.setText("Downloaded")
+            self.source_status_label.setStyleSheet(f"""
+                color: {theme.get_color('success')};
+                background: {theme.get_color('success_light')};
+                padding: 4px 8px;
+                border-radius: 2px;
+                border: none;
+                margin-bottom: 8px;
+            """)
+            self.source_button.setText("Open Source")
+            self.delete_source_button.setVisible(True)
+        else:
+            self.source_status_label.setText("Not downloaded")
+            self.source_status_label.setStyleSheet(f"""
+                color: {theme.get_color('text_tertiary')};
+                border: none;
+                margin-bottom: 8px;
+            """)
+            self.source_button.setText("Download Source")
+            self.delete_source_button.setVisible(False)
+
         # Notes
         if paper.notes and paper.notes.note_text:
             self.note_editor.set_note(paper.notes.note_text)
@@ -245,6 +291,14 @@ class ContextPanelWidget(QWidget):
     def _on_delete_pdf(self):
         if self.current_paper:
             self.delete_pdf_requested.emit(self.current_paper.id)
+
+    def _on_view_source(self):
+        if self.current_paper:
+            self.view_source_requested.emit(self.current_paper.id)
+
+    def _on_delete_source(self):
+        if self.current_paper:
+            self.delete_source_requested.emit(self.current_paper.id)
 
     def _on_rating_changed(self, importance, comprehension, technicality):
         if self.current_paper:

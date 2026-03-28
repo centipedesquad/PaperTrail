@@ -7,7 +7,7 @@ import logging
 from typing import List
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QScrollArea, QLabel,
-    QLineEdit, QComboBox, QApplication
+    QLineEdit, QComboBox, QPushButton, QApplication
 )
 from PySide6.QtCore import Qt, Signal
 from models import Paper
@@ -24,6 +24,8 @@ class PaperFeedWidget(QWidget):
     paper_selected = Signal(object)  # Paper object
     search_requested = Signal(str)   # search text
     sort_changed = Signal(str)       # sort key
+    arxiv_search_requested = Signal(str)  # search text for arXiv fallback
+    import_paper_requested = Signal(dict)  # paper data dict to import
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -187,3 +189,158 @@ class PaperFeedWidget(QWidget):
 
     def _on_sort_changed(self):
         self.sort_changed.emit(self.sort_combo.currentData() or "date_desc")
+
+    # --- arXiv fallback and preview ---
+
+    def show_arxiv_fallback(self, query: str):
+        """Show 'No local matches' with a 'Search arXiv' button."""
+        self.clear_papers()
+        self.empty_label.setVisible(False)
+
+        theme = get_theme_manager()
+
+        fallback_widget = QWidget()
+        fallback_widget.setObjectName("arxiv_fallback")
+        fallback_layout = QVBoxLayout(fallback_widget)
+        fallback_layout.setAlignment(Qt.AlignCenter)
+        fallback_layout.setContentsMargins(50, 50, 50, 50)
+        fallback_layout.setSpacing(16)
+
+        msg = QLabel(f'No papers match "{query}"\nin your library.')
+        msg.setAlignment(Qt.AlignCenter)
+        msg.setFont(theme.get_body_font(size_pt=13))
+        msg.setStyleSheet(f"color: {theme.get_color('text_primary')};")
+        fallback_layout.addWidget(msg)
+
+        btn = QPushButton("Search arXiv")
+        btn.setFont(theme.get_body_font(size_pt=11))
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                border: 1px solid {theme.get_color('primary')};
+                color: {theme.get_color('primary')};
+                background: transparent;
+                border-radius: 2px;
+                padding: 8px 20px;
+            }}
+            QPushButton:hover {{
+                background-color: {theme.get_color('primary_light')};
+            }}
+        """)
+        btn.clicked.connect(lambda: self.arxiv_search_requested.emit(query))
+        fallback_layout.addWidget(btn, alignment=Qt.AlignCenter)
+
+        self.container_layout.addWidget(fallback_widget)
+        self.paper_cells.append(fallback_widget)  # track for cleanup
+        self.feed_meta.setText("")
+
+    def show_filtered_empty(self):
+        """Show 'No results (filters active)' — no arXiv fallback."""
+        self.clear_papers()
+        self.empty_label.setText("No results (filters active)")
+        self.empty_label.setVisible(True)
+        self.feed_meta.setText("")
+
+    def show_loading(self, message: str = "Searching..."):
+        """Show a loading message in the feed area."""
+        self.clear_papers()
+        self.empty_label.setText(message)
+        self.empty_label.setVisible(True)
+        self.feed_meta.setText("")
+
+    def show_arxiv_preview(self, paper_data: dict):
+        """Show a preview card for an arXiv paper not yet in the library."""
+        self.clear_papers()
+        self.empty_label.setVisible(False)
+        theme = get_theme_manager()
+
+        card = QWidget()
+        card.setObjectName("arxiv_preview")
+        card.setStyleSheet(f"""
+            QWidget#arxiv_preview {{
+                background-color: {theme.get_color('primary_light')};
+                border-radius: 4px;
+                margin: 16px;
+            }}
+        """)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(20, 16, 20, 16)
+        card_layout.setSpacing(6)
+
+        # Title
+        title = QLabel(paper_data.get('title', 'Untitled'))
+        title.setFont(theme.get_display_font(size_pt=14))
+        title.setWordWrap(True)
+        card_layout.addWidget(title)
+
+        # Authors
+        authors = paper_data.get('authors', [])
+        authors_str = ", ".join(
+            a['name'] if isinstance(a, dict) else str(a) for a in authors[:5]
+        )
+        if len(authors) > 5:
+            authors_str += f" +{len(authors) - 5} more"
+        authors_label = QLabel(authors_str)
+        authors_label.setFont(theme.get_body_font(size_pt=11))
+        authors_label.setStyleSheet(f"color: {theme.get_color('text_secondary')};")
+        authors_label.setWordWrap(True)
+        card_layout.addWidget(authors_label)
+
+        # Metadata: arXiv ID · category · year
+        arxiv_id = paper_data.get('arxiv_id', '')
+        primary_cat = paper_data.get('primary_category', '')
+        pub_date = paper_data.get('publication_date', '')
+        year = pub_date[:4] if pub_date else ''
+        meta_parts = [s for s in [arxiv_id, primary_cat, year] if s]
+        meta_label = QLabel(" \u00b7 ".join(meta_parts))
+        meta_label.setFont(theme.get_mono_font(size_pt=9))
+        meta_label.setStyleSheet(f"color: {theme.get_color('text_secondary')};")
+        card_layout.addWidget(meta_label)
+
+        # Abstract (max 3 lines)
+        abstract = paper_data.get('abstract', '')
+        if abstract:
+            preview_text = abstract[:300].replace('\n', ' ')
+            if len(abstract) > 300:
+                preview_text += "..."
+            abstract_label = QLabel(preview_text)
+            abstract_label.setFont(theme.get_body_font(size_pt=12))
+            abstract_label.setWordWrap(True)
+            abstract_label.setMaximumHeight(80)
+            card_layout.addWidget(abstract_label)
+
+        # Import button
+        import_btn = QPushButton("Import to Library")
+        import_btn.setFont(theme.get_body_font(size_pt=11))
+        import_btn.setCursor(Qt.PointingHandCursor)
+        import_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {theme.get_color('primary')};
+                color: {theme.get_color('primary_text')};
+                border-radius: 2px;
+                padding: 8px 20px;
+                border: none;
+            }}
+            QPushButton:hover {{
+                background-color: {theme.get_color('primary_hover')};
+            }}
+        """)
+        import_btn.clicked.connect(lambda: self.import_paper_requested.emit(paper_data))
+        card_layout.addWidget(import_btn, alignment=Qt.AlignLeft)
+
+        # Footer hint
+        hint = QLabel("This paper is from arXiv \u00b7 not yet in your library")
+        hint.setFont(theme.get_body_font(size_pt=10))
+        hint.setStyleSheet(f"color: {theme.get_color('text_tertiary')};")
+        card_layout.addWidget(hint)
+
+        self.container_layout.addWidget(card)
+        self.paper_cells.append(card)  # track for cleanup
+        self.feed_meta.setText("")
+
+    def show_error_message(self, message: str):
+        """Show an error/info message in the feed area."""
+        self.clear_papers()
+        self.empty_label.setText(message)
+        self.empty_label.setVisible(True)
+        self.feed_meta.setText("")

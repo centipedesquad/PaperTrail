@@ -139,6 +139,10 @@ class PaperService:
         """Update local PDF path for a paper."""
         self.paper_repo.update_local_pdf_path(paper_id, pdf_path)
 
+    def update_source_path(self, paper_id: int, source_path: str):
+        """Update local source path for a paper."""
+        self.paper_repo.update_local_source_path(paper_id, source_path)
+
     def mark_accessed(self, paper_id: int):
         """Mark paper as accessed (updates last_accessed timestamp)."""
         self.paper_repo.update_last_accessed(paper_id)
