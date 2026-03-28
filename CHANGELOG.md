@@ -2,6 +2,18 @@
 
 All notable changes to PaperTrail are documented in this file.
 
+## v0.6.4 — 2026-03-28
+
+### Changed
+
+- `run.sh` and `build_app.sh` now auto-create a local `.venv` and install required dependencies when missing
+- Build and installation docs now point to `src/PaperTrail.spec`, document macOS 11+ support, and clarify architecture-specific app builds
+- Application metadata and About dialog updated for version `0.6.4`
+
+### Fixed
+
+- Running or building from a fresh checkout no longer requires manually creating the virtual environment first
+
 ## v0.6.3 — 2026-03-27
 
 ### Changed
