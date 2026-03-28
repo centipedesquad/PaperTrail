@@ -502,9 +502,12 @@ class MainWindow(QMainWindow):
             result = self.fetch_service.import_papers(selected_papers)
             imported = result['imported']
             duplicates = result['duplicates']
+            errors = result.get('errors', 0)
             parts = [f"Imported {imported} papers"]
             if duplicates > 0:
                 parts.append(f"{duplicates} duplicates skipped")
+            if errors > 0:
+                parts.append(f"{errors} errors")
             self._update_statusbar(", ".join(parts), 5000)
 
             # Refresh feed and categories
