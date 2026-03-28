@@ -9,23 +9,25 @@ This document explains the git branching strategy and workflow for the PaperTrai
 **Purpose**: Production-ready code that users can clone, run from source, or build into a `.app`.
 
 **Contains**:
+
 - Source code (`src/` directory)
 - Dependencies (`pyproject.toml`)
 - Documentation (`README.md`, `BUILDING.md`, `CHANGELOG.md`)
 - Run script (`run.sh`)
-- Build scripts (`build_app.sh`, `install.sh`)
-- Build configuration (`papertrail.spec`)
+- Build script (`build_app.sh`)
+- Build configuration (`src/PaperTrail.spec`)
 - Git configuration (`.gitignore`, `.gitattributes`)
 
 **Does NOT contain**:
+
 - Test files (`test_phase2.py`)
 - Internal planning documents (`IMPLEMENTATION.md`)
 - Internal deployment docs (`DEPLOYMENT.md`)
-- Unused build configs (`setup.py`)
 - Build artifacts (`dist/`, `build/`)
 - Runtime files (`data/`, `*.log`)
 
 **Commit Policy**:
+
 - Only release commits
 - Tagged with version numbers (e.g., `v0.3.0`, `v0.4.0`)
 - Clean, working code only
@@ -36,17 +38,20 @@ This document explains the git branching strategy and workflow for the PaperTrai
 **Purpose**: Active development with full tooling, tests, and internal documentation.
 
 **Contains**:
+
 - Everything from `main` branch
 - Test files
 - Internal deployment docs (`DEPLOYMENT.md`)
 - Development helpers
 
 **Does NOT contain**:
+
 - Internal planning (`IMPLEMENTATION.md`) - see .gitignore
 - Build artifacts (`.app`, `dist/`, `build/`)
 - Runtime files (`data/`, logs)
 
 **Commit Policy**:
+
 - Phase completion commits
 - Feature branches merge here
 - Work-in-progress allowed
@@ -88,8 +93,7 @@ src/
     └── filename_utils.py
 
 build_app.sh        - Build .app bundle
-install.sh          - Install to /Applications
-papertrail.spec     - PyInstaller configuration
+src/PaperTrail.spec - PyInstaller configuration
 BUILDING.md         - Build instructions
 ```
 
@@ -97,7 +101,6 @@ BUILDING.md         - Build instructions
 
 ```
 test_phase2.py      - Integration tests
-setup.py            - py2app configuration (unused)
 DEPLOYMENT.md       - Internal deployment/distribution guide
 ```
 
@@ -126,33 +129,41 @@ sh .githooks/setup.sh
 
 ### What the hooks check
 
-| Hook | What it catches |
-|------|----------------|
+
+| Hook         | What it catches                                                                                 |
+| ------------ | ----------------------------------------------------------------------------------------------- |
 | `pre-commit` | Secrets files (`.env`, credentials) on any branch; dev-only files and build artifacts on `main` |
-| `commit-msg` | Empty messages; vague messages like "fix" or "wip" (blocked on `main`, warned on `dev`) |
-| `pre-push` | Pushes to `main` without a version tag (`v0.X.0`) |
+| `commit-msg` | Empty messages; vague messages like "fix" or "wip" (blocked on `main`, warned on `dev`)         |
+| `pre-push`   | Pushes to `main` without a version tag (`v0.X.0`)                                               |
+
 
 To bypass in an emergency: `git commit --no-verify` or `git push --no-verify`
 
 ## Workflow
 
+### Prerequisites
+
+The run and build scripts will automatically create a `.venv` if one is not found, so no additional tooling is strictly required beyond Python 3.10+. However, [`uv`](https://docs.astral.sh/uv/getting-started/installation/) is recommended for faster, reproducible dependency management. If you use another virtual environment manager, ensure the environment is placed in a local `.venv/` folder.
+
 ### For Users (Cloning from main)
 
 #### Run from source
+
 ```bash
 git clone <repo-url>
 cd PaperTrail
-uv sync
+uv sync          # optional — run.sh auto-creates .venv if missing
 ./run.sh
 ```
 
 #### Build and install the .app
+
 ```bash
 git clone <repo-url>
 cd PaperTrail
-uv sync
+uv sync          # optional — build_app.sh auto-creates .venv if missing
 ./build_app.sh
-./install.sh
+cp -r dist/PaperTrail.app /Applications/
 ```
 
 **Result**: Full source code with build tools — users can run from source or build a native `.app`.
@@ -165,7 +176,7 @@ git clone <repo-url>
 cd PaperTrail
 git checkout dev
 
-# Install dependencies
+# Install dependencies (or let run.sh handle it automatically)
 uv sync
 
 # Run from source
@@ -175,7 +186,7 @@ uv sync
 ./build_app.sh
 
 # Install
-./install.sh
+cp -r dist/PaperTrail.app /Applications/
 ```
 
 **Result**: Full development environment with tests and internal docs.
@@ -185,60 +196,52 @@ uv sync
 ### Making Changes
 
 1. **Switch to dev branch**:
-   ```bash
+  ```bash
    git checkout dev
-   ```
-
+  ```
 2. **Create feature branch** (optional):
-   ```bash
+  ```bash
    git checkout -b feature/phase4-ratings
-   ```
-
+  ```
 3. **Make changes, test, commit**:
-   ```bash
+  ```bash
    git add <files>
    git commit -m "Phase 4: Add rating widgets"
-   ```
-
+  ```
 4. **Merge to dev**:
-   ```bash
+  ```bash
    git checkout dev
-   git merge feature/phase4-ratings
-   ```
+   git merge --ff-only feature/phase4-ratings
+  ```
 
 ### Creating a Release
 
 1. **Ensure dev is clean and tested**:
-   ```bash
+  ```bash
    git checkout dev
    ./build_app.sh  # Test build
    ./run.sh        # Test run
-   ```
-
+  ```
 2. **Update version numbers**:
-   - `papertrail.spec` (version)
-   - `README.md` (if needed)
-
+  - Run `./bump_version.sh X.Y.Z`
+  - `README.md` (if needed)
 3. **Commit version bump to dev**:
-   ```bash
+  ```bash
    git commit -am "Bump version to 0.4.0"
-   ```
-
+  ```
 4. **Review what changed since last release**:
-   ```bash
+  ```bash
    git log main..dev --oneline          # Commit summary
    git diff --stat main..dev            # Files changed
-   ```
-
+  ```
 5. **Cherry-pick release files to main**:
-   ```bash
+  ```bash
    git checkout main
-   git checkout dev -- src/ pyproject.toml README.md run.sh LICENSE build_app.sh install.sh BUILDING.md
+   git checkout dev -- src/ pyproject.toml README.md run.sh LICENSE build_app.sh BUILDING.md
    git add .
-   ```
-
+  ```
 6. **Update CHANGELOG.md** on main with the new release entry:
-   ```markdown
+  ```markdown
    ## v0.4.0 — 2026-XX-XX
 
    ### Added
@@ -250,11 +253,10 @@ uv sync
 
    ### Fixed
    - Bug fix 1
-   ```
+  ```
    Use the diff log from step 4 to ensure nothing is missed.
-
 7. **Commit and tag**:
-   ```bash
+  ```bash
    git add CHANGELOG.md
    git commit -m "Summary of changes since last release
 
@@ -262,12 +264,11 @@ uv sync
    - Feature or fix 2
    - Feature or fix 3"
    git tag -a v0.4.0 -m "v0.4.0"
-   ```
-
+  ```
 8. **Switch back to dev for continued work**:
-   ```bash
+  ```bash
    git checkout dev
-   ```
+  ```
 
 ## Commit Message Guidelines
 
@@ -287,6 +288,7 @@ Related: Phase X, Issue #Y
 ### Examples
 
 **Good**:
+
 ```
 Add inline rating widgets to paper cells
 
@@ -298,6 +300,7 @@ Phase 4: Ratings & Notes
 ```
 
 **Bad**:
+
 ```
 Fixed stuff
 ```
@@ -318,9 +321,10 @@ Fixed stuff
 **Why**: Keeps main free of test files, WIP commits, and internal docs
 
 **Command**:
+
 ```bash
 git checkout main
-git checkout dev -- src/ pyproject.toml README.md run.sh LICENSE build_app.sh install.sh BUILDING.md
+git checkout dev -- src/ pyproject.toml README.md run.sh LICENSE build_app.sh BUILDING.md
 # Update CHANGELOG.md with release notes
 git add .
 git commit -m "Summary of changes since last release"
@@ -333,6 +337,7 @@ git commit -m "Summary of changes since last release"
 **Why**: Preserve development history
 
 **Command**:
+
 ```bash
 git checkout dev
 git merge feature/my-feature
@@ -394,17 +399,7 @@ git diff --stat main..dev       # Summary
 git diff main..dev              # Full diff
 ```
 
-## Current Status
-
-**Branches**:
-- `main`: v0.3.0 (Phases 1-3 complete)
-- `dev`: v0.3.0 + tests + internal docs
-
-**Next**:
-- Phase 4 development on `dev`
-- Release v0.4.0 when complete
-
 ---
 
-**Last Updated**: 2025-03-25
+**Last Updated**: 2026-03-28
 **Maintained by**: Project Team

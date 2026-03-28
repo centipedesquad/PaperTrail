@@ -4,9 +4,9 @@ This document explains how to build a standalone macOS application bundle (.app)
 
 ## Prerequisites
 
-- macOS 10.13 or later
+- macOS 11 (Big Sur) or later
 - Python 3.10 or higher
-- `uv` package manager
+- `uv` package manager (optional — the build script auto-creates a `.venv` if one is not found)
 
 ## Building the Application
 
@@ -29,14 +29,14 @@ This will:
 If you want to build manually:
 
 ```bash
-# Activate virtual environment
+# Activate virtual environment (if you don't have one, run ./build_app.sh once — it creates one automatically)
 source .venv/bin/activate
 
 # Clean previous builds
 rm -rf build dist
 
 # Build with PyInstaller
-pyinstaller --clean --noconfirm papertrail.spec
+python -m PyInstaller --clean --noconfirm src/PaperTrail.spec
 ```
 
 ## Installing the Application
@@ -70,8 +70,8 @@ open dist/PaperTrail.app
 - **Bundle Identifier**: com.papertrail.app
 - **Version**: 0.2.0
 - **Size**: ~146 MB
-- **Architecture**: Universal (Intel + Apple Silicon)
-- **Minimum macOS**: 10.13
+- **Architecture**: Matches host Python (Apple Silicon or Intel — see note below)
+- **Minimum macOS**: 11 (Big Sur)
 
 ## What's Included
 
@@ -124,7 +124,7 @@ If the database is corrupted, you can reset it:
 
 ## Build Configuration
 
-The build is configured in `papertrail.spec`:
+The build is configured in `src/PaperTrail.spec`:
 - Excluded packages to reduce size (matplotlib, numpy, etc.)
 - Included database migration scripts
 - Bundle metadata and Info.plist settings
@@ -159,6 +159,10 @@ create-dmg --volname "PaperTrail" --window-size 600 400 --icon-size 100 \
 ```
 
 This creates a drag-and-drop installer DMG.
+
+## Architecture Note
+
+PyInstaller builds for the architecture of the host Python interpreter. If you build on an Apple Silicon Mac, the `.app` will be arm64-only. If you build on Intel, it will be x86_64-only. To produce a universal binary, you would need to install a [universal2 Python build](https://www.python.org/downloads/macos/) from python.org and set `target_arch='universal2'` in the spec file.
 
 ## Notes
 
