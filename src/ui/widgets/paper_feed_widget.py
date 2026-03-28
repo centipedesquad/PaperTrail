@@ -234,6 +234,43 @@ class PaperFeedWidget(QWidget):
         self.paper_cells.append(fallback_widget)  # track for cleanup
         self.feed_meta.setText("")
 
+    def append_arxiv_search_option(self, query: str):
+        """Append a 'Search arXiv' button at the end of the current results."""
+        theme = get_theme_manager()
+
+        divider = QWidget()
+        divider_layout = QVBoxLayout(divider)
+        divider_layout.setAlignment(Qt.AlignCenter)
+        divider_layout.setContentsMargins(20, 16, 20, 16)
+        divider_layout.setSpacing(8)
+
+        hint = QLabel("Not finding what you need?")
+        hint.setAlignment(Qt.AlignCenter)
+        hint.setFont(theme.get_body_font(size_pt=11))
+        hint.setStyleSheet(f"color: {theme.get_color('text_tertiary')};")
+        divider_layout.addWidget(hint)
+
+        btn = QPushButton("Search arXiv")
+        btn.setFont(theme.get_body_font(size_pt=11))
+        btn.setCursor(Qt.PointingHandCursor)
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                border: 1px solid {theme.get_color('primary')};
+                color: {theme.get_color('primary')};
+                background: transparent;
+                border-radius: 2px;
+                padding: 8px 20px;
+            }}
+            QPushButton:hover {{
+                background-color: {theme.get_color('primary_light')};
+            }}
+        """)
+        btn.clicked.connect(lambda: self.arxiv_search_requested.emit(query))
+        divider_layout.addWidget(btn, alignment=Qt.AlignCenter)
+
+        self.container_layout.addWidget(divider)
+        self.paper_cells.append(divider)  # track for cleanup
+
     def show_filtered_empty(self):
         """Show 'No results (filters active)' — no arXiv fallback."""
         self.clear_papers()

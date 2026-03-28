@@ -362,6 +362,7 @@ class MainWindow(QMainWindow):
 
             if papers:
                 self.paper_feed.set_papers(papers)
+                self.paper_feed.append_arxiv_search_option(search_text)
                 self._update_statusbar(f"{len(papers)} papers found")
             else:
                 # No local results — check if filters are active
