@@ -285,6 +285,8 @@ class SourceDownloadWorker(QThread):
                 if total > 0:
                     percentage = min(int((current / total) * 90), 90)
                     self.progress.emit(percentage, f"Downloading: {current}/{total} bytes")
+                else:
+                    self.progress.emit(-1, f"Downloading: {current} bytes")
 
             result_path = self.download_func(
                 self.paper,

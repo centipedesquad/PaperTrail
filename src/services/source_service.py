@@ -108,6 +108,8 @@ class SourceService:
             if magic[:2] == b'\x1f\x8b':
                 # Gzip magic bytes — try tar.gz first, fall back to gzip-only
                 try:
+                    real_tmp = os.path.realpath(tmp_extract)
+                    extracted_count = 0
                     with tarfile.open(archive_path, 'r:gz') as tar:
                         # Path traversal protection
                         for member in tar.getmembers():
@@ -118,8 +120,20 @@ class SourceService:
                             if member.issym() or member.islnk():
                                 logger.warning(f"Skipping symlink in archive: {member.name}")
                                 continue
+                            # Verify resolved path stays within extraction directory
+                            final_path = os.path.realpath(os.path.join(tmp_extract, member_path))
+                            if not final_path.startswith(real_tmp + os.sep) and final_path != real_tmp:
+                                logger.warning(f"Path escapes extraction directory: {member.name}")
+                                continue
                             tar.extract(member, tmp_extract)
-                    logger.info(f"Extracted tar.gz archive for {arxiv_id}")
+                            if not member.isdir():
+                                extracted_count += 1
+                    if extracted_count == 0:
+                        logger.warning(f"Archive for {arxiv_id} contained no extractable files")
+                        if os.path.exists(tmp_extract):
+                            shutil.rmtree(tmp_extract)
+                        return None
+                    logger.info(f"Extracted tar.gz archive for {arxiv_id} ({extracted_count} files)")
                 except tarfile.TarError:
                     # Not a tar — try plain gzip
                     output_path = os.path.join(tmp_extract, f"{arxiv_id}.tex")

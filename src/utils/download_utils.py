@@ -33,19 +33,19 @@ def download_file(
     """
     logger.info(f"Downloading from {url}")
 
-    response = requests.get(url, stream=True, timeout=timeout)
-    response.raise_for_status()
+    with requests.get(url, stream=True, timeout=timeout) as response:
+        response.raise_for_status()
 
-    total_size = int(response.headers.get('content-length', 0))
-    downloaded = 0
+        total_size = int(response.headers.get('content-length', 0))
+        downloaded = 0
 
-    with open(dest_path, 'wb') as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            if chunk:
-                f.write(chunk)
-                downloaded += len(chunk)
-                if progress_callback:
-                    progress_callback(downloaded, total_size)
+        with open(dest_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if progress_callback:
+                        progress_callback(downloaded, total_size)
 
     logger.info(f"Downloaded to: {dest_path}")
     return dest_path

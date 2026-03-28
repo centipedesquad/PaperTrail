@@ -154,7 +154,8 @@ class FetchService:
         try:
             paper_data = self.arxiv_client.fetch_by_arxiv_id(arxiv_id)
             if paper_data:
-                # Save to database
+                # Save to database (manual lookup = search origin)
+                paper_data['origin'] = 'search'
                 paper_id = self.paper_service.create_paper(paper_data)
                 if paper_id:
                     logger.info(f"Fetched and saved paper: {arxiv_id}")
@@ -192,7 +193,9 @@ class FetchService:
             List of paper data dictionaries
         """
         try:
-            results = self.arxiv_client.search_papers(query, max_results=max_results)
+            results = self._fetch_with_retry(
+                lambda: self.arxiv_client.search_papers(query, max_results=max_results)
+            )
             logger.info(f"arXiv search for '{query}': {len(results)} results")
             return results
         except Exception as e:

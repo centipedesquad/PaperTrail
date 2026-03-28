@@ -58,6 +58,7 @@ class MainWindow(QMainWindow):
         self.arxiv_search_worker = None
         self.source_worker = None
         self._cursor_override_count = 0
+        self._search_generation = 0  # generation counter for stale arXiv result rejection
 
         self._setup_ui()
         self._setup_menubar()
@@ -259,6 +260,9 @@ class MainWindow(QMainWindow):
             categories = self.paper_service.get_all_categories()
             category_counts = self.paper_service.get_category_counts()
             self.filter_panel.set_categories(categories, category_counts)
+            total = self.paper_service.get_total_count()
+            imported = self.paper_service.get_imported_count()
+            self.filter_panel.set_library_counts(total, imported)
             logger.info(f"Loaded {len(categories)} categories with counts")
         except Exception as e:
             logger.error(f"Failed to load categories: {e}")
@@ -273,6 +277,8 @@ class MainWindow(QMainWindow):
                     date_to=filters.get('date_to'),
                     has_pdf=filters.get('has_pdf'),
                     has_rating=filters.get('has_rating'),
+                    origin=filters.get('origin'),
+                    include_downloaded=filters.get('include_downloaded', False),
                     sort_by=filters.get('sort_by', 'date_desc'),
                     limit=100
                 )
@@ -332,8 +338,10 @@ class MainWindow(QMainWindow):
         self._cancel_arxiv_workers()
 
         if not search_text:
-            # Empty search — restore default feed
-            self._load_papers()
+            # Empty search — preserve filter panel state
+            filters = self.filter_panel.get_filters()
+            filters['sort_by'] = self.paper_feed.get_sort_key()
+            self._load_papers(filters)
             return
 
         # Check if input is an arXiv ID
@@ -396,15 +404,21 @@ class MainWindow(QMainWindow):
         self.paper_feed.show_loading("Fetching paper from arXiv...")
         self._update_statusbar(f"Looking up {arxiv_id} on arXiv...")
 
+        self._search_generation += 1
+        gen = self._search_generation
         self.arxiv_id_worker = ArxivIdWorker(
             self.fetch_service.fetch_by_arxiv_id_preview, arxiv_id
         )
-        self.arxiv_id_worker.finished.connect(self._on_arxiv_id_result)
+        self.arxiv_id_worker.finished.connect(
+            lambda data, g=gen: self._on_arxiv_id_result(data, g)
+        )
         self.arxiv_id_worker.error.connect(self._on_arxiv_id_error)
         self.arxiv_id_worker.start()
 
-    def _on_arxiv_id_result(self, paper_data):
+    def _on_arxiv_id_result(self, paper_data, generation: int):
         """Handle arXiv ID lookup result — show preview card."""
+        if generation != self._search_generation:
+            return  # stale result from a superseded search
         if paper_data:
             try:
                 self.paper_feed.show_arxiv_preview(paper_data)
@@ -423,6 +437,7 @@ class MainWindow(QMainWindow):
     def _on_import_paper_requested(self, paper_data: dict):
         """Handle 'Import to Library' button from preview card."""
         try:
+            paper_data['origin'] = 'search'
             paper_id = self.paper_service.create_paper(paper_data)
             if paper_id:
                 self._update_statusbar("Paper imported to library", 3000)
@@ -473,6 +488,8 @@ class MainWindow(QMainWindow):
     def _on_batch_import(self, selected_papers: list):
         """Import selected papers from the picker dialog."""
         try:
+            for pd in selected_papers:
+                pd['origin'] = 'search'
             result = self.fetch_service.import_papers(selected_papers)
             imported = result['imported']
             duplicates = result['duplicates']
@@ -611,7 +628,10 @@ class MainWindow(QMainWindow):
             self.source_service.download_source, paper, permanent
         )
         self.source_worker.progress.connect(self._on_source_progress)
-        self.source_worker.finished.connect(lambda path: self._on_source_finished(paper, path))
+        paper_id = paper.id
+        self.source_worker.finished.connect(
+            lambda path, pid=paper_id: self._on_source_finished(pid, path)
+        )
         self.source_worker.error.connect(self._on_source_error)
         self.source_worker.start()
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
@@ -620,14 +640,13 @@ class MainWindow(QMainWindow):
     def _on_source_progress(self, percentage: int, message: str):
         self._update_statusbar(message)
 
-    def _on_source_finished(self, paper, source_path: str):
+    def _on_source_finished(self, paper_id: int, source_path: str):
         QApplication.restoreOverrideCursor()
         self._update_statusbar("Source files ready", 3000)
-        self.source_service.open_source(paper)
-        # Refresh context panel
-        full_paper = self.paper_service.get_paper(paper.id)
-        if full_paper:
-            self.context_panel.set_paper(full_paper)
+        paper = self.paper_service.get_paper(paper_id)
+        if paper:
+            self.source_service.open_source(paper)
+            self.context_panel.set_paper(paper)
 
     def _on_source_error(self, error: str):
         QApplication.restoreOverrideCursor()

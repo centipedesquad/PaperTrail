@@ -87,6 +87,8 @@ class PaperService:
         date_to: Optional[str] = None,
         has_pdf: Optional[bool] = None,
         has_rating: Optional[bool] = None,
+        origin: Optional[str] = None,
+        include_downloaded: bool = False,
         sort_by: str = "date_desc",
         limit: int = 100
     ) -> List[Paper]:
@@ -100,6 +102,8 @@ class PaperService:
             date_to: Filter by publication date
             has_pdf: Filter by local PDF existence
             has_rating: Filter by rating existence
+            origin: Filter by paper origin ('fetch' or 'search')
+            include_downloaded: When True with origin, also include papers with downloaded PDFs
             sort_by: Sort order (date_desc, date_asc, title_asc, title_desc)
             limit: Maximum results
 
@@ -113,9 +117,19 @@ class PaperService:
             date_to=date_to,
             has_pdf=has_pdf,
             has_rating=has_rating,
+            origin=origin,
+            include_downloaded=include_downloaded,
             sort_by=sort_by,
             limit=limit
         )
+
+    def get_total_count(self) -> int:
+        """Get total number of papers."""
+        return self.paper_repo.get_total_count()
+
+    def get_imported_count(self) -> int:
+        """Get count of imported papers (searched + downloaded)."""
+        return self.paper_repo.get_imported_count()
 
     def get_all_categories(self) -> List[tuple]:
         """
@@ -139,7 +153,7 @@ class PaperService:
         """Update local PDF path for a paper."""
         self.paper_repo.update_local_pdf_path(paper_id, pdf_path)
 
-    def update_source_path(self, paper_id: int, source_path: str):
+    def update_source_path(self, paper_id: int, source_path: Optional[str]):
         """Update local source path for a paper."""
         self.paper_repo.update_local_source_path(paper_id, source_path)
 

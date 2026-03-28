@@ -139,6 +139,7 @@ class FilterPanelWidget(QWidget):
         self._add_nav_item("Recent", "recent", {"view": "recent"})
         self._add_nav_item("Unread", "unread", {"view": "unread"})
         self._add_nav_item("Rated", "rated", {"view": "rated"})
+        self._add_nav_item("Imported", "imported", {"view": "imported"})
 
         if "all" in self.nav_items:
             self.nav_items["all"].set_active(True)
@@ -281,6 +282,9 @@ class FilterPanelWidget(QWidget):
             filters["has_rating"] = False
         elif view == "rated":
             filters["has_rating"] = True
+        elif view == "imported":
+            filters["origin"] = "search"
+            filters["include_downloaded"] = True
 
         return filters
 
@@ -305,6 +309,13 @@ class FilterPanelWidget(QWidget):
         self.filters_changed.emit(filters)
 
     # --- Public API ---
+
+    def set_library_counts(self, total: int, imported: int):
+        """Update counts on library nav items."""
+        if "all" in self.nav_items:
+            self.nav_items["all"].set_count(total)
+        if "imported" in self.nav_items:
+            self.nav_items["imported"].set_count(imported)
 
     def set_categories(self, categories: List[tuple], category_counts: dict = None):
         """Populate the categories section of the nav rail."""

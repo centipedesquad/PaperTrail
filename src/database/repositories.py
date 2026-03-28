@@ -83,8 +83,8 @@ class PaperRepository:
             """
             INSERT INTO papers (
                 arxiv_id, title, abstract, publication_date, pdf_url,
-                version, comment, journal_ref, doi
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                version, comment, journal_ref, doi, origin
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 paper_data['arxiv_id'],
@@ -95,7 +95,8 @@ class PaperRepository:
                 paper_data.get('version'),
                 paper_data.get('comment'),
                 paper_data.get('journal_ref'),
-                paper_data.get('doi')
+                paper_data.get('doi'),
+                paper_data.get('origin', 'fetch')
             )
         )
         paper_id = cursor.lastrowid
@@ -199,6 +200,8 @@ class PaperRepository:
         date_to: Optional[str] = None,
         has_pdf: Optional[bool] = None,
         has_rating: Optional[bool] = None,
+        origin: Optional[str] = None,
+        include_downloaded: bool = False,
         sort_by: str = "date_desc",
         limit: int = 100
     ) -> List[Paper]:
@@ -270,6 +273,13 @@ class PaperRepository:
                     "id NOT IN (SELECT paper_id FROM paper_ratings "
                     "WHERE importance IS NOT NULL OR comprehension IS NOT NULL OR technicality IS NOT NULL)"
                 )
+
+        if origin:
+            if include_downloaded:
+                where_clauses.append("(origin = ? OR local_pdf_path IS NOT NULL)")
+            else:
+                where_clauses.append("origin = ?")
+            params.append(origin)
 
         # Determine ORDER BY clause
         order_clauses = {
@@ -383,6 +393,7 @@ class PaperRepository:
             pdf_url=row['pdf_url'],
             local_pdf_path=row['local_pdf_path'],
             local_source_path=row['local_source_path'] if 'local_source_path' in row.keys() else None,
+            origin=row['origin'] if 'origin' in row.keys() else 'fetch',
             version=row['version'],
             comment=row['comment'],
             journal_ref=row['journal_ref'],
@@ -392,6 +403,18 @@ class PaperRepository:
             created_at=row['created_at'],
             updated_at=row['updated_at']
         )
+
+    def get_total_count(self) -> int:
+        """Get total number of papers."""
+        row = self.db.fetch_one("SELECT COUNT(*) as count FROM papers")
+        return row['count'] if row else 0
+
+    def get_imported_count(self) -> int:
+        """Get count of imported papers (searched + downloaded)."""
+        row = self.db.fetch_one(
+            "SELECT COUNT(*) as count FROM papers WHERE origin = 'search' OR local_pdf_path IS NOT NULL"
+        )
+        return row['count'] if row else 0
 
     def _load_related_data(self, paper: Paper):
         """Load authors, categories, notes, and ratings for a single paper."""
