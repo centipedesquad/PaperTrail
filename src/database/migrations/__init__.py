@@ -116,10 +116,17 @@ BEGIN
 END;
 """
 
-from database.migrations import baseline_schema, fts5_contentless
+from database.migrations import (
+    baseline_schema,
+    fts5_contentless,
+    add_local_source_path,
+    add_origin_column,
+)
 
 # Ordered list of all migrations. Order matters for fresh databases.
 MIGRATION_REGISTRY = [
     baseline_schema,
     fts5_contentless,
+    add_local_source_path,
+    add_origin_column,
 ]

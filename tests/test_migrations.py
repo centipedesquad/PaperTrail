@@ -36,7 +36,7 @@ def v001_db():
     # Apply the original 001 schema with content=papers FTS
     sql_path = os.path.join(
         os.path.dirname(__file__), '..', 'src', 'database', 'migrations',
-        '001_initial_schema.sql'
+        'archive', '001_initial_schema.sql'
     )
     with open(sql_path) as f:
         conn.executescript(f.read())
@@ -169,3 +169,51 @@ def test_reset_database(fresh_db):
     row = conn.execute("SELECT count(*) FROM papers").fetchone()
     assert row[0] == 0
     assert mm.needs_migration() is False
+
+
+def test_fresh_db_has_new_columns(fresh_db):
+    """Fresh DB gets local_source_path and origin columns from baseline."""
+    mm = MigrationManager(fresh_db)
+    mm.migrate()
+
+    conn = fresh_db.connect()
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(papers)").fetchall()}
+    assert "local_source_path" in columns
+    assert "origin" in columns
+
+    # origin has correct default
+    conn.execute(
+        "INSERT INTO papers (arxiv_id, title, abstract, publication_date, pdf_url) "
+        "VALUES ('test', 'Test', 'Abstract', '2024-01-01', 'http://test')"
+    )
+    conn.commit()
+    row = conn.execute("SELECT origin FROM papers WHERE arxiv_id = 'test'").fetchone()
+    assert row[0] == "fetch"
+
+    # origin index exists
+    indexes = {row[1] for row in conn.execute("PRAGMA index_list(papers)").fetchall()}
+    assert "idx_papers_origin" in indexes
+
+
+def test_v001_upgrade_gets_new_columns(v001_db):
+    """v001 DB upgrade adds local_source_path and origin via ALTER TABLE migrations."""
+    mm = MigrationManager(v001_db)
+    mm.migrate()
+
+    conn = v001_db.connect()
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(papers)").fetchall()}
+    assert "local_source_path" in columns
+    assert "origin" in columns
+    assert mm.needs_migration() is False
+
+
+def test_new_column_migrations_are_noop_on_fresh_db(fresh_db):
+    """On fresh DB, column migrations skip because baseline already has the columns."""
+    from database.migrations import add_local_source_path, add_origin_column
+
+    mm = MigrationManager(fresh_db)
+    mm.migrate()
+
+    conn = fresh_db.connect()
+    assert add_local_source_path.needs_run(conn) is False
+    assert add_origin_column.needs_run(conn) is False

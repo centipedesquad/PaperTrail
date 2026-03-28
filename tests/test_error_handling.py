@@ -190,6 +190,10 @@ class TestPDFServiceErrors:
         pdf_service = self._make_pdf_service(db)
         mock_response = MagicMock()
         mock_response.raise_for_status.side_effect = requests.HTTPError("404 Not Found")
+        # requests.get is used as a context manager — __enter__ must return
+        # the same mock so raise_for_status fires inside the with block
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
         with patch('services.pdf_service.requests.get', return_value=mock_response):
             result = pdf_service.download_pdf(self._make_paper(), permanent=False)
         assert result is None

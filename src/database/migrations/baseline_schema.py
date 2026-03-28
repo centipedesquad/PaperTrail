@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS papers (
     publication_date TEXT NOT NULL,
     pdf_url TEXT NOT NULL,
     local_pdf_path TEXT,
+    local_source_path TEXT,
     version TEXT,
     comment TEXT,
     journal_ref TEXT,
@@ -31,12 +32,14 @@ CREATE TABLE IF NOT EXISTS papers (
     date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_accessed TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    origin TEXT NOT NULL DEFAULT 'fetch'
 );
 
 CREATE INDEX IF NOT EXISTS idx_papers_arxiv_id ON papers(arxiv_id);
 CREATE INDEX IF NOT EXISTS idx_papers_publication_date ON papers(publication_date);
 CREATE INDEX IF NOT EXISTS idx_papers_date_added ON papers(date_added);
+CREATE INDEX IF NOT EXISTS idx_papers_origin ON papers(origin);
 
 -- Authors table with normalized names
 CREATE TABLE IF NOT EXISTS authors (

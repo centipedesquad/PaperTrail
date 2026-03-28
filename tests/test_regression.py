@@ -59,8 +59,8 @@ class TestFetchWorkerSignalRegression:
         assert isinstance(result, dict)
         assert 'fetched' in result
         # len() on this dict should NOT be used as paper count
-        # The dict has 4 keys, which was the old bug
-        assert len(result) == 4
+        # The dict has 5 keys: fetched, created, duplicates, errors, papers
+        assert len(result) == 5
         assert result['fetched'] == 0
 
     def test_fetched_count_is_correct(self, db):
