@@ -28,7 +28,7 @@ Bugs found by **[BOTH]** models are highest confidence.
 **Severity:** High — Silent partial migration
 **Found by:** Codex (round 4)
 
-`migration_manager.py` runs migrations with `executescript()` and treats "duplicate column name" as success. If a migration partially applies (column added but index/version update skipped), the manager may still advance the schema version.
+`migration_manager.py` runs migrations with `executescript()` and treats "duplicate column name" as success. If a migration partially applies, the manager may still advance the schema version.
 
 **Fix:** Make each SQL file idempotent or wrap in explicit transaction/savepoint.
 
@@ -42,7 +42,7 @@ Bugs found by **[BOTH]** models are highest confidence.
 **Severity:** High — FTS5 delete may miss rows with different author ordering
 **Found by:** Codex (round 4)
 
-`GROUP_CONCAT(a.name, ' ') ... ORDER BY pa.author_order` inside the same aggregate query does not guarantee order in SQLite. The delete command requires exact value match, so author ordering drift can leave stale FTS entries.
+`GROUP_CONCAT(a.name, ' ') ... ORDER BY pa.author_order` in the same aggregate query does not guarantee order in SQLite. The delete command requires exact value match, so ordering drift can leave stale FTS entries.
 
 **Fix:** Use ordered subquery: `GROUP_CONCAT(name, ' ') FROM (SELECT ... ORDER BY author_order)`.
 
@@ -109,7 +109,21 @@ Bugs found by **[BOTH]** models are highest confidence.
 
 **Fix:** Return success/failure from cleanup and refuse replacement until old worker is fully disconnected.
 
-**Files:** `src/ui/main_window.py` — `_cleanup_worker()` (line ~213), `src/utils/async_utils.py`
+**Files:** `src/ui/main_window.py` — `_cleanup_worker()` (line ~213)
+
+---
+
+### Bug #6: _on_cell_clicked Crashes When Non-PaperCellWidget in paper_cells `[BOTH]`
+
+**Status:** OPEN
+**Severity:** High — App crash on paper click after search
+**Found by:** Claude (round 4)
+
+`append_arxiv_search_option()` adds a plain QWidget to `paper_cells`. When user clicks any paper card, `_on_cell_clicked` iterates the list and calls `cell.paper.id` on the QWidget — `AttributeError` crash.
+
+**Fix:** Add `isinstance(cell, PaperCellWidget)` check in the loop, or keep separate list.
+
+**Files:** `src/ui/widgets/paper_feed_widget.py` (lines ~179, ~272)
 
 ---
 
