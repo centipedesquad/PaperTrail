@@ -365,6 +365,8 @@ class MainWindow(QMainWindow):
                 date_to=filters.get('date_to'),
                 has_pdf=filters.get('has_pdf'),
                 has_rating=filters.get('has_rating'),
+                origin=filters.get('origin'),
+                include_downloaded=filters.get('include_downloaded', False),
                 sort_by=filters.get('sort_by', 'date_desc'),
                 limit=100
             )

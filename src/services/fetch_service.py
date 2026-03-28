@@ -173,12 +173,11 @@ class FetchService:
 
         Returns:
             Paper data dictionary or None
+
+        Raises:
+            Exception: On network/API errors (so worker error signal fires)
         """
-        try:
-            return self.arxiv_client.fetch_by_arxiv_id(arxiv_id)
-        except Exception as e:
-            logger.error(f"Failed to fetch paper preview {arxiv_id}: {e}")
-            return None
+        return self.arxiv_client.fetch_by_arxiv_id(arxiv_id)
 
     def search_arxiv(self, query: str, max_results: int = 50) -> list:
         """
@@ -191,33 +190,37 @@ class FetchService:
 
         Returns:
             List of paper data dictionaries
+
+        Raises:
+            Exception: On network/API errors (so worker error signal fires)
         """
-        try:
-            results = self._fetch_with_retry(
-                lambda: self.arxiv_client.search_papers(query, max_results=max_results)
-            )
-            logger.info(f"arXiv search for '{query}': {len(results)} results")
-            return results
-        except Exception as e:
-            logger.error(f"arXiv search failed for '{query}': {e}")
-            return []
+        results = self._fetch_with_retry(
+            lambda: self.arxiv_client.search_papers(query, max_results=max_results)
+        )
+        logger.info(f"arXiv search for '{query}': {len(results)} results")
+        return results
 
     def import_papers(self, paper_data_list: list) -> dict:
         """
         Import multiple papers into the database.
 
         Returns:
-            dict with 'imported' count and 'duplicates' count
+            dict with 'imported', 'duplicates', and 'errors' counts
         """
         imported = 0
         duplicates = 0
+        errors = 0
         for paper_data in paper_data_list:
-            paper_id = self.paper_service.create_paper(paper_data)
-            if paper_id:
-                imported += 1
-            else:
-                duplicates += 1
-        return {'imported': imported, 'duplicates': duplicates}
+            try:
+                paper_id = self.paper_service.create_paper(paper_data)
+                if paper_id:
+                    imported += 1
+                else:
+                    duplicates += 1
+            except Exception as e:
+                errors += 1
+                logger.error(f"Failed to import {paper_data.get('arxiv_id')}: {e}")
+        return {'imported': imported, 'duplicates': duplicates, 'errors': errors}
 
     def _fetch_with_retry(self, fetch_func, max_retries: int = 3, base_delay: float = 1.0):
         """Call fetch_func with exponential backoff retry for transient errors.

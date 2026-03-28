@@ -148,4 +148,4 @@ BEGIN
 END;
 
 -- Update schema version
-INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '003');
+INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', '004');
