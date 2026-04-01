@@ -102,7 +102,7 @@ Bugs found by **[BOTH]** models are highest confidence.
 
 ### Bug #19: Partial Rating Update Overwrites Other Dimensions with NULL
 
-**Status:** OPEN
+**Status:** FIXED
 **Severity:** High — Silent data loss on ratings
 **Found by:** Claude (round 5 — migration hardening)
 
@@ -112,9 +112,9 @@ Bugs found by **[BOTH]** models are highest confidence.
 
 **User impact:** If a user rates a paper's importance, then later rates its comprehension, the second save silently wipes the importance rating to NULL. Over time, users lose ratings they've already set without any indication.
 
-**Fix:** Use `COALESCE(excluded.importance, importance)` in the ON CONFLICT clause so NULL parameters preserve existing values, or read-then-merge in Python.
+**Fix:** Added `COALESCE(excluded.X, paper_ratings.X)` in the ON CONFLICT clause so NULL parameters preserve existing values instead of overwriting them.
 
-**Files:** `src/database/repositories.py` — `RatingsRepository.create_or_update()` (line ~546)
+**Files:** `src/database/repositories.py` — `RatingsRepository.create_or_update()` (line ~578)
 
 ---
 
@@ -407,6 +407,7 @@ Grouped by how the user would experience the bug.
 | **Ratings don't work correctly** | | | |
 | | R2-13 | Can't un-rate a paper — old values persist | Medium |
 | | R3-9 | Cleared ratings still show paper as "Rated" in filters | Medium |
+| | R6-2 | Partial rating update overwrites other dimensions with NULL | High |
 | **arXiv fetch returns partial/wrong data** | | | |
 | | R2-7 | Failed categories silently skipped — looks like no new papers | High |
 | | R2-8 | Legacy IDs (hep-th/9901001) stored wrong — broken dedup/URLs | High |
