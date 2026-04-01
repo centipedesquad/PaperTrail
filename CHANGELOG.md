@@ -2,6 +2,14 @@
 
 All notable changes to PaperTrail are documented in this file.
 
+## v0.7.1 — 2026-04-01
+
+### Changed
+
+- Version bumped to 0.7.1
+- Removed `install.sh` — installation is handled by `build_app.sh` and documented in README
+- Added changelog for v0.7.0
+
 ## v0.7.0 — 2026-04-01
 
 ### Added
@@ -32,7 +40,6 @@ All notable changes to PaperTrail are documented in this file.
 
 ### Changed
 
-- Version bumped to 0.7.0
 - Search bar now checks for arXiv ID patterns before falling back to text search
 - `search_papers()` accepts `origin` and `include_downloaded` filter parameters
 - Stale arXiv search results are rejected via a generation counter
