@@ -62,7 +62,9 @@ class PaperService:
                         duplicate_count += 1
         except Exception as e:
             logger.error(f"Batch creation failed: {e}")
-            error_count = len(papers_data) - created_count - duplicate_count
+            created_count = 0
+            duplicate_count = 0
+            error_count = len(papers_data)
 
         logger.info(f"Created {created_count} out of {len(papers_data)} papers")
         return {'created': created_count, 'duplicates': duplicate_count, 'errors': error_count}

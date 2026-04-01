@@ -58,7 +58,7 @@ Bugs found by **[BOTH]** models are highest confidence.
 
 ### Bug #4: Batch Create Reports Success After Transaction Rollback `[BOTH]`
 
-**Status:** OPEN
+**Status:** FIXED
 **Severity:** High — UI reports papers created when none were saved
 **Found by:** Both (round 4)
 
@@ -66,9 +66,9 @@ Bugs found by **[BOTH]** models are highest confidence.
 
 **User impact:** If a batch import fails partway through, the database correctly rolls back all inserts — but the UI still reports papers were created. The user believes their import worked when nothing was actually saved.
 
-**Fix:** Reset counts to 0 on rollback, or use per-paper savepoints.
+**Fix:** On exception (after transaction rollback), reset `created_count` and `duplicate_count` to 0 and set `error_count` to the total batch size so the returned dict accurately reflects that nothing was saved.
 
-**Files:** `src/services/paper_service.py` — `create_papers_batch()` (line ~55)
+**Files:** `src/services/paper_service.py` — `create_papers_batch()` (line ~63)
 
 ---
 
@@ -388,6 +388,7 @@ Grouped by how the user would experience the bug.
 | | R3-12 | Failed PDF download says "complete, failed to open" | Medium |
 | | R4-5 | PDF filename collision — papers can silently overwrite each other | High |
 | | R4-9 | arXiv preview/search failures shown as "Not Found" not error | Medium |
+| | R6-3 | Batch create reports success after transaction rollback | High |
 | **App hangs, crashes, or cursor stuck** | | | |
 | | R2-2 | Closing app during download crashes with thread error | Critical |
 | | R2-6 | Wait cursor permanently stuck after interrupted download | High |
