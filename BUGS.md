@@ -26,7 +26,7 @@ Bugs found by **[BOTH]** models are highest confidence.
 
 ### Bug #2: Migration executescript Partial Apply Can Advance Schema Version
 
-**Status:** OPEN
+**Status:** FIXED
 **Severity:** High — Silent partial migration
 **Found by:** Codex (round 4)
 
@@ -34,9 +34,9 @@ Bugs found by **[BOTH]** models are highest confidence.
 
 **User impact:** During a version upgrade, if a migration SQL file half-succeeds, the app may believe the migration completed. On next launch the broken migration is skipped, leaving the database in a corrupted schema state that causes mysterious query failures.
 
-**Fix:** Make each SQL file idempotent or wrap in explicit transaction/savepoint.
+**Fix:** Schema version now derives from introspection: counts how many migrations' `needs_run()` returns False after the migration loop, reflecting actual schema state rather than assuming all migrations in the registry were applied.
 
-**Files:** `src/database/migration_manager.py` (lines ~91, ~98)
+**Files:** `src/database/migration_manager.py` (lines ~49-58)
 
 ---
 
