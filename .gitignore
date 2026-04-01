@@ -45,6 +45,9 @@ htmlcov/
 # Claude Code
 .claude/
 
+# AI artifacts (plans, screenshots, generated assets)
+ai/
+
 # Internal planning documents (not for repo)
 TODO.md
 IMPLEMENTATION.md

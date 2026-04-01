@@ -16,6 +16,10 @@ All font choices, colors, spacing, and aesthetic direction are defined there.
 Do not deviate without explicit user approval.
 In QA mode, flag any code that doesn't match DESIGN.md.
 
+## AI-Generated Artifacts
+
+Place all AI-generated artifacts (design mockups, analysis reports, diagrams, planning docs, audit outputs, etc.) in the `ai/` folder. Only files that are directly part of the repository's functional purpose (source code, configs, and core documentation like README/CLAUDE.md/BUGS.md/CHANGELOG.md/DESIGN.md) belong in the repo root or `src/`. When unsure whether a file is an artifact or a functional file, ask before placing it.
+
 ## Git Commits
 
 - Do NOT add "Co-Authored-By: Claude" signatures to commits.
