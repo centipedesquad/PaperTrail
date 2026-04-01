@@ -275,7 +275,7 @@ cp -r dist/PaperTrail.app /Applications/
 ### Format
 
 ```
-Short summary (50 chars or less)
+<type>: short summary (50 chars or less)
 
 Detailed description if needed:
 - What changed
@@ -285,18 +285,37 @@ Detailed description if needed:
 Related: Phase X, Issue #Y
 ```
 
+Use a conventional commit prefix that matches the primary purpose of the change:
+
+| Prefix       | When to use                                      |
+| ------------ | ------------------------------------------------ |
+| `feat:`      | New feature or capability                        |
+| `fix:`       | Bug fix                                          |
+| `refactor:`  | Code restructuring with no behavior change       |
+| `docs:`      | Documentation-only changes                       |
+| `chore:`     | Config, tooling, CI, or other maintenance        |
+| `version:`   | Version bump commits                             |
+
 ### Examples
 
 **Good**:
 
 ```
-Add inline rating widgets to paper cells
+feat: add inline rating widgets to paper cells
 
 Implements three-dropdown rating system (importance,
 comprehension, technicality) directly in paper cells.
 Auto-saves on selection.
 
 Phase 4: Ratings & Notes
+```
+
+```
+fix: FTS5 delete commands must supply exact authors for contentless match
+```
+
+```
+docs: update BUGS.md with cross-model audit findings (round 4)
 ```
 
 **Bad**:
@@ -307,8 +326,9 @@ Fixed stuff
 
 ### Rules
 
+- Always start with a conventional commit prefix (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `version:`)
 - Clear, descriptive messages
-- Imperative mood ("Add feature" not "Added feature")
+- Imperative mood ("add feature" not "added feature")
 - Reference phase/issue if applicable
 - Explain WHY if not obvious
 
