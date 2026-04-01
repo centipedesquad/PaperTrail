@@ -32,7 +32,7 @@ No open HIGH severity bugs.
 
 ### Bug #8: Partial PDF Downloads Leave Orphaned Files `[BOTH]`
 
-**Status:** OPEN
+**Status:** FIXED
 **Severity:** Medium — Orphaned partial files accumulate, collision logic triggered
 **Found by:** Both (round 4)
 
@@ -40,9 +40,9 @@ No open HIGH severity bugs.
 
 **User impact:** If a PDF download is cancelled or fails mid-stream, a partial (unreadable) file is left on disk. Retries generate suffixed filenames because the orphan already exists, so partial files accumulate and waste disk space.
 
-**Fix:** Download into `*.part` temp file, remove on failure, atomically rename on success.
+**Fix:** Downloads now write to a `.part` temp file. On success, `os.replace()` atomically moves it to the final path. On any failure, the `.part` file is cleaned up. Matches the pattern used in `source_service.py`.
 
-**Files:** `src/services/pdf_service.py` (line ~120)
+**Files:** `src/services/pdf_service.py` (line ~113)
 
 ---
 
