@@ -106,11 +106,12 @@ class ArxivClient:
                 cat_count = 0
                 for result in search.results():
                     if result.published.replace(tzinfo=None) >= cutoff_date:
-                        paper = self._convert_result_to_dict(result)
-                        papers.append(paper)
-                        cat_count += 1
-                        if cat_count >= max_results:
-                            break
+                        if result.primary_category == category:
+                            paper = self._convert_result_to_dict(result)
+                            papers.append(paper)
+                            cat_count += 1
+                            if cat_count >= max_results:
+                                break
 
             except Exception as e:
                 logger.warning(f"Failed to fetch papers from {category}: {e}")

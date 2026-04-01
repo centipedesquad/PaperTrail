@@ -1,6 +1,6 @@
-# Open Bugs - PaperTrail
+# Bugs — PaperTrail
 
-*Last audited: 2026-03-27 — Round 4 by Claude (Opus 4.6) + Codex (GPT-5.4)*
+*Last audited: 2026-04-01 — Round 6 by Claude (Opus 4.6)*
 
 Bugs found by **[BOTH]** models are highest confidence.
 
@@ -8,113 +8,7 @@ Bugs found by **[BOTH]** models are highest confidence.
 
 ## HIGH
 
-### Bug #1: Transaction Lock Deadlock on connect() Failure
-
-**Status:** FIXED
-**Severity:** High — App freezes permanently
-**Found by:** Codex (round 4)
-
-`transaction()` acquires `_lock` before calling `connect()`. If `connect()` raises (e.g., during DB recovery), the `try/finally` hasn't started yet, so the lock is never released. Every subsequent DB call deadlocks.
-
-**User impact:** If the database connection drops (e.g. disk full, file locked), the app freezes permanently. Every subsequent database operation queues behind a lock that will never be released. The only recovery is force-quitting.
-
-**Fix:** Replaced explicit `acquire()`/`release()` with `with self._lock:` context manager, matching the pattern used by adjacent methods. `connect()` is now inside the guarded block, so any exception always releases the lock.
-
-**Files:** `src/database/connection.py` — `transaction()` (line ~222)
-
----
-
-### Bug #2: Migration executescript Partial Apply Can Advance Schema Version
-
-**Status:** FIXED
-**Severity:** High — Silent partial migration
-**Found by:** Codex (round 4)
-
-`migration_manager.py` runs migrations with `executescript()` and treats "duplicate column name" as success. If a migration partially applies, the manager may still advance the schema version.
-
-**User impact:** During a version upgrade, if a migration SQL file half-succeeds, the app may believe the migration completed. On next launch the broken migration is skipped, leaving the database in a corrupted schema state that causes mysterious query failures.
-
-**Fix:** Schema version now derives from introspection: counts how many migrations' `needs_run()` returns False after the migration loop, reflecting actual schema state rather than assuming all migrations in the registry were applied.
-
-**Files:** `src/database/migration_manager.py` (lines ~49-58)
-
----
-
-### Bug #3: GROUP_CONCAT ORDER BY Not Guaranteed in FTS5 Triggers
-
-**Status:** FIXED
-**Severity:** High — FTS5 delete may miss rows with different author ordering
-**Found by:** Codex (round 4)
-
-`GROUP_CONCAT(a.name, ' ') ... ORDER BY pa.author_order` in the same aggregate query does not guarantee order in SQLite. The delete command requires exact value match, so ordering drift can leave stale FTS entries.
-
-**User impact:** When a paper's authors are reordered or updated, the FTS5 delete command may not match the stored value. The old entry stays in the search index, causing phantom search results for papers that no longer match the query.
-
-**Fix:** All 7 GROUP_CONCAT instances in FTS5_TRIGGER_SQL wrapped in ordered subqueries: `GROUP_CONCAT(name, ' ') FROM (SELECT ... ORDER BY author_order)`. New migration `fix_fts5_group_concat_order` drops and recreates triggers on existing databases.
-
-**Files:** `src/database/migrations/__init__.py`, `src/database/migrations/fix_fts5_group_concat_order.py`
-
----
-
-### Bug #4: Batch Create Reports Success After Transaction Rollback `[BOTH]`
-
-**Status:** FIXED
-**Severity:** High — UI reports papers created when none were saved
-**Found by:** Both (round 4)
-
-`create_papers_batch()` increments counters inside a transaction. If one paper fails, the transaction rolls back ALL prior inserts, but the returned counts still claim papers were created.
-
-**User impact:** If a batch import fails partway through, the database correctly rolls back all inserts — but the UI still reports papers were created. The user believes their import worked when nothing was actually saved.
-
-**Fix:** On exception (after transaction rollback), reset `created_count` and `duplicate_count` to 0 and set `error_count` to the total batch size so the returned dict accurately reflects that nothing was saved.
-
-**Files:** `src/services/paper_service.py` — `create_papers_batch()` (line ~63)
-
----
-
-### Bug #5: Worker Cleanup Race — Old Worker Can Mutate UI
-
-**Status:** FIXED
-**Severity:** High — Stale operations affect current UI state
-**Found by:** Codex (round 4)
-
-`_cleanup_worker()` gives up after 2s timeout, but callers overwrite the worker attribute. The old thread keeps signal connections and can later mutate UI from a stale operation.
-
-**Fix:** When worker doesn't stop in time, `disconnect()` severs all signal connections before clearing the attribute. The old thread runs to completion but cannot mutate UI. `deleteLater()` is not called on still-running threads per Qt safety rules.
-
-**Files:** `src/ui/main_window.py` — `_cleanup_worker()` (line ~216)
-
----
-
-### Bug #6: _on_cell_clicked Crashes When Non-PaperCellWidget in paper_cells `[BOTH]`
-
-**Status:** FIXED
-**Severity:** High — App crash on paper click after search
-**Found by:** Claude (round 4)
-
-`append_arxiv_search_option()` adds a plain QWidget to `paper_cells`. When user clicks any paper card, `_on_cell_clicked` iterates the list and calls `cell.paper.id` on the QWidget — `AttributeError` crash.
-
-**Fix:** Added `isinstance(cell, PaperCellWidget)` guard in the iteration loop so non-cell widgets (dividers, fallback cards) are safely skipped.
-
-**Files:** `src/ui/widgets/paper_feed_widget.py` (line ~180)
-
----
-
-### Bug #19: Partial Rating Update Overwrites Other Dimensions with NULL
-
-**Status:** FIXED
-**Severity:** High — Silent data loss on ratings
-**Found by:** Claude (round 5 — migration hardening)
-
-`RatingsRepository.create_or_update()` uses `ON CONFLICT DO UPDATE SET importance = excluded.importance, ...` which unconditionally overwrites all three fields. When a user updates only one dimension (e.g. comprehension), the other dimensions are passed as `None` and overwrite previously saved values.
-
-**Repro:** Call `create_or_update(paper_id, importance="good")`, then `create_or_update(paper_id, comprehension="understood")`. The second call wipes `importance` to `None`.
-
-**User impact:** If a user rates a paper's importance, then later rates its comprehension, the second save silently wipes the importance rating to NULL. Over time, users lose ratings they've already set without any indication.
-
-**Fix:** Added `COALESCE(excluded.X, paper_ratings.X)` in the ON CONFLICT clause so NULL parameters preserve existing values instead of overwriting them.
-
-**Files:** `src/database/repositories.py` — `RatingsRepository.create_or_update()` (line ~578)
+No open HIGH severity bugs.
 
 ---
 
@@ -152,22 +46,6 @@ Bugs found by **[BOTH]** models are highest confidence.
 
 ---
 
-### Bug #9: Source Service Legacy ID Paths Not Fully Sanitized `[BOTH]`
-
-**Status:** FIXED
-**Severity:** Medium — Legacy arXiv IDs with `/` break non-tar source extraction
-**Found by:** Both (round 4)
-
-`source_service.py` uses raw `arxiv_id` in filenames for gzip/PDF/single-file extraction. Legacy IDs like `hep-th/9901001` create paths with missing intermediate directories.
-
-**User impact:** Papers with legacy arXiv IDs containing `/` (e.g. `hep-th/9901001`) fail during source extraction because the raw ID creates paths with nonexistent intermediate directories. Users get a cryptic file-not-found error when viewing source files for older papers.
-
-**Fix:** `_extract_archive` now sanitizes `arxiv_id` with `replace('/', '_')` at the top of the method and uses the sanitized `safe_id` for all three filename construction paths (gzip, PDF, single-file).
-
-**Files:** `src/services/source_service.py` (lines ~103, ~146, ~153, ~157)
-
----
-
 ### Bug #10: PDF/Source Download Overwrites Current Context Panel Selection
 
 **Status:** OPEN
@@ -200,25 +78,9 @@ When a PDF/source download finishes, the context panel always reloads the paper 
 
 ---
 
-### Bug #12: arXiv Error Callbacks Not Generation-Guarded `[BOTH]`
-
-**Status:** FIXED
-**Severity:** Medium — Stale error can replace current UI
-**Found by:** Both (round 4)
-
-arXiv success handlers are generation-guarded, but error handlers are not. A cancelled search can show a stale error message.
-
-**User impact:** If a user starts an arXiv search, cancels it, and starts a new one, the first search's error response can arrive late and overwrite the UI with a stale "Could not reach arXiv" message — even though the second search is succeeding.
-
-**Fix:** Both `_on_arxiv_id_error` and `_on_arxiv_search_error` now accept a `generation` parameter and check it against `_search_generation` before acting. The error lambdas capture generation by value via default arg.
-
-**Files:** `src/ui/main_window.py` (lines ~422-424, ~442-444, ~482-484, ~502-504)
-
----
-
 ### Bug #13: fetch_recent_papers Cross-Lists Not Filtered by Primary Category
 
-**Status:** OPEN
+**Status:** FIXED
 **Severity:** Medium — Wrong papers shown in category fetch
 **Found by:** Codex (round 4)
 
@@ -226,9 +88,9 @@ arXiv success handlers are generation-guarded, but error handlers are not. A can
 
 **User impact:** When fetching recent papers for a specific category (e.g. `cs.AI`), papers merely cross-listed into that category but primarily belonging to another field leak into the results. Users see off-topic papers mixed into their feed.
 
-**Fix:** Apply the same primary-category filter in both paths.
+**Fix:** Added `result.primary_category == category` filter matching the existing pattern in `fetch_new_papers()`.
 
-**Files:** `src/api/arxiv_client.py` (line ~107)
+**Files:** `src/api/arxiv_client.py` (line ~108)
 
 ---
 
@@ -314,7 +176,7 @@ Version comparison uses string ordering. `"9" > "10"` in string comparison. Curr
 
 ---
 
-### Bug #19: Corrupted .venv Directory Silently Breaks Auto-Creation
+### Bug #20: Corrupted .venv Directory Silently Breaks Auto-Creation
 
 **Status:** OPEN
 **Severity:** Low — Edge case: requires manually broken .venv
@@ -332,20 +194,7 @@ Version comparison uses string ordering. `"9" > "10"` in string comparison. Curr
 
 ---
 
-## Previously Fixed Bugs
-
-### Round 1 — 9 bugs fixed
-### Round 2 — 20 bugs fixed
-### Round 3 — 14 bugs fixed
-### Round 4 — 13 bugs fixed (1 false positive closed)
-### Round 5 (review) — 2 bugs fixed (#9, #12)
-### Round 6 — 7 bugs fixed (#1, #2, #3, #4, #5, #6, #19)
-
-**Total: 65 bugs fixed across 6 rounds.**
-
----
-
-## Fixed Bugs — User-Facing Impact
+## Fixed Bugs — User-Facing Impact (65 total across 6 rounds)
 
 Grouped by how the user would experience the bug.
 
