@@ -16,6 +16,7 @@ from typing import Optional, Callable
 
 from models import Paper
 from utils.download_utils import download_file
+from utils.filename_utils import FilenameGenerator
 from utils.platform_utils import ensure_directory_exists
 
 logger = logging.getLogger(__name__)
@@ -64,8 +65,20 @@ class SourceService:
         try:
             url = self.get_source_url(paper)
             dest_dir = self.sources_dir if permanent else self.cache_dir
-            safe_id = paper.arxiv_id.replace('/', '_')
-            extract_dir = os.path.join(dest_dir, safe_id)
+
+            if permanent:
+                pattern = self.config_service.get_pdf_naming_pattern()
+                generator = FilenameGenerator(pattern)
+                folder_name = generator.generate_folder_name(paper)
+                extract_dir = os.path.join(dest_dir, folder_name)
+                # Collision handling: append arxiv_id if folder already exists
+                if os.path.exists(extract_dir):
+                    safe_id = paper.arxiv_id.replace('/', '_')
+                    folder_name = f"{folder_name}_{safe_id}"
+                    extract_dir = os.path.join(dest_dir, folder_name)
+            else:
+                safe_id = paper.arxiv_id.replace('/', '_')
+                extract_dir = os.path.join(dest_dir, safe_id)
 
             # Download to a temp file first
             with tempfile.NamedTemporaryFile(

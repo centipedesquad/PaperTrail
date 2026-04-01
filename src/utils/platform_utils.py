@@ -118,6 +118,47 @@ def open_pdf_external(pdf_path: str, reader_path: Optional[str] = None) -> bool:
         return False
 
 
+def reveal_in_file_manager(file_path: str) -> bool:
+    """
+    Reveal a file in the platform's file manager.
+
+    macOS: opens Finder with the file selected.
+    Linux: opens the parent directory in the file manager.
+
+    Args:
+        file_path: Path to the file to reveal
+
+    Returns:
+        True if successful, False otherwise
+    """
+    if not os.path.exists(file_path):
+        logger.error(f"File not found: {file_path}")
+        return False
+
+    system = get_platform()
+
+    try:
+        if system == 'macos':
+            subprocess.Popen(['open', '-R', file_path])
+        else:
+            parent_dir = os.path.dirname(file_path)
+            subprocess.Popen(['xdg-open', parent_dir])
+
+        logger.info(f"Revealed in file manager: {file_path}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to reveal in file manager: {e}")
+        return False
+
+
+def get_file_manager_name() -> str:
+    """Get the platform-specific name for the file manager."""
+    system = get_platform()
+    if system == 'macos':
+        return 'Finder'
+    return 'Files'
+
+
 def cleanup_cache_dir(cache_dir: str):
     """
     Clean up cache directory by removing all files.

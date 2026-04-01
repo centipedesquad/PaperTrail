@@ -25,6 +25,7 @@ from utils.async_utils import (
     FetchWorker, PDFDownloadWorker, ArxivIdWorker,
     ArxivSearchWorker, SourceDownloadWorker
 )
+from utils.platform_utils import reveal_in_file_manager
 from ui.theme import get_theme_manager, ThemeMode
 
 logger = logging.getLogger(__name__)
@@ -111,6 +112,7 @@ class MainWindow(QMainWindow):
         self.context_panel.setMaximumWidth(420)
         self.context_panel.view_pdf_requested.connect(self._on_view_pdf)
         self.context_panel.delete_pdf_requested.connect(self._on_delete_pdf)
+        self.context_panel.show_pdf_in_finder_requested.connect(self._on_show_pdf_in_finder)
         self.context_panel.view_source_requested.connect(self._on_view_source)
         self.context_panel.delete_source_requested.connect(self._on_delete_source)
         self.context_panel.rating_changed.connect(self._on_rating_changed)
@@ -620,6 +622,22 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"Error deleting PDF: {e}")
             QMessageBox.critical(self, "Error", f"Failed to delete PDF:\n\n{str(e)}")
+
+    def _on_show_pdf_in_finder(self, paper_id: int):
+        """Reveal the downloaded PDF in the system file manager."""
+        try:
+            paper = self.paper_service.get_paper(paper_id)
+            if not paper:
+                return
+
+            if not self.pdf_service.has_local_pdf(paper):
+                self._update_statusbar("No local PDF to reveal", 3000)
+                return
+
+            if not reveal_in_file_manager(paper.local_pdf_path):
+                QMessageBox.warning(self, "Error", "Failed to reveal PDF in file manager.")
+        except Exception as e:
+            logger.error(f"Error revealing PDF: {e}")
 
     # --- Source file actions ---
 

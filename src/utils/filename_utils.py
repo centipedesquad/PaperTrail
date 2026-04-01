@@ -57,6 +57,21 @@ class FilenameGenerator:
 
         return filename
 
+    def generate_folder_name(self, paper: Paper) -> str:
+        """
+        Generate folder name from paper and pattern (no .pdf extension).
+
+        Args:
+            paper: Paper object
+
+        Returns:
+            Sanitized folder name
+        """
+        filename = self.generate(paper)
+        if filename.lower().endswith('.pdf'):
+            filename = filename[:-4]
+        return filename
+
     def _get_author_lastname(self, paper: Paper, index: int) -> str:
         """
         Get last name of author at index.
