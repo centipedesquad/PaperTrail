@@ -88,15 +88,15 @@ Bugs found by **[BOTH]** models are highest confidence.
 
 ### Bug #6: _on_cell_clicked Crashes When Non-PaperCellWidget in paper_cells `[BOTH]`
 
-**Status:** OPEN
+**Status:** FIXED
 **Severity:** High — App crash on paper click after search
 **Found by:** Claude (round 4)
 
 `append_arxiv_search_option()` adds a plain QWidget to `paper_cells`. When user clicks any paper card, `_on_cell_clicked` iterates the list and calls `cell.paper.id` on the QWidget — `AttributeError` crash.
 
-**Fix:** Add `isinstance(cell, PaperCellWidget)` check in the loop, or keep separate list.
+**Fix:** Added `isinstance(cell, PaperCellWidget)` guard in the iteration loop so non-cell widgets (dividers, fallback cards) are safely skipped.
 
-**Files:** `src/ui/widgets/paper_feed_widget.py` (lines ~179, ~272)
+**Files:** `src/ui/widgets/paper_feed_widget.py` (line ~180)
 
 ---
 
@@ -339,8 +339,9 @@ Version comparison uses string ordering. `"9" > "10"` in string comparison. Curr
 ### Round 3 — 14 bugs fixed
 ### Round 4 — 13 bugs fixed (1 false positive closed)
 ### Round 5 (review) — 2 bugs fixed (#9, #12)
+### Round 6 — 7 bugs fixed (#1, #2, #3, #4, #5, #6, #19)
 
-**Total: 58 bugs fixed across 5 rounds.**
+**Total: 65 bugs fixed across 6 rounds.**
 
 ---
 
@@ -398,6 +399,7 @@ Grouped by how the user would experience the bug.
 | | R4-3 | Corrupt DB recovery infinite recursion — stack overflow | Critical |
 | | R6-1 | Transaction lock deadlock on connect() failure — app freezes permanently | High |
 | | R6-5 | Worker cleanup race — old worker mutates UI after replacement | High |
+| | R6-6 | Clicking paper after search crashes on non-PaperCellWidget in list | High |
 | **Data corruption or silent data loss** | | | |
 | | R2-3 | SQL interleaving across threads can corrupt database | Critical |
 | | R1-3 | HTTP response stream leak — sockets accumulate | High |

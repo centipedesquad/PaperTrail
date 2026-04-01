@@ -177,7 +177,7 @@ class PaperFeedWidget(QWidget):
 
         # Find and select the clicked cell
         for cell in self.paper_cells:
-            if cell.paper.id == paper.id:
+            if isinstance(cell, PaperCellWidget) and cell.paper.id == paper.id:
                 cell.set_selected(True)
                 self.selected_cell = cell
                 break
