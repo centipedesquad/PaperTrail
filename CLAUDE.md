@@ -40,3 +40,23 @@ After implementing any bug fix:
 3. **Validate signal/slot flows** — If modifying Qt signal handlers, confirm that emitted signals carry the correct data and that `current_paper`/state hasn't changed between emit and handler execution.
 4. **Fix regressions before reporting done** — Do not mark a bug as fixed if the fix introduces a new bug. Verify end-to-end before committing.
 5. **Update BUGS.md** — After fixing bugs, update both the open bugs section and the "Fixed Bugs — User-Facing Impact" table at the end of the file.
+
+## Skill routing
+
+When the user's request matches an available skill, ALWAYS invoke it using the Skill
+tool as your FIRST action. Do NOT answer directly, do NOT use other tools first.
+The skill has specialized workflows that produce better results than ad-hoc answers.
+
+Key routing rules:
+- Product ideas, "is this worth building", brainstorming → invoke office-hours
+- Bugs, errors, "why is this broken", 500 errors → invoke investigate
+- Ship, deploy, push, create PR → invoke ship
+- QA, test the site, find bugs → invoke qa
+- Code review, check my diff → invoke review
+- Update docs after shipping → invoke document-release
+- Weekly retro → invoke retro
+- Design system, brand → invoke design-consultation
+- Visual audit, design polish → invoke design-review
+- Architecture review → invoke plan-eng-review
+- Save progress, checkpoint, resume → invoke checkpoint
+- Code quality, health check → invoke health
