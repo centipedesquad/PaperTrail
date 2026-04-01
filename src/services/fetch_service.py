@@ -202,25 +202,17 @@ class FetchService:
 
     def import_papers(self, paper_data_list: list) -> dict:
         """
-        Import multiple papers into the database.
+        Import multiple papers into the database in a single transaction.
 
         Returns:
             dict with 'imported', 'duplicates', and 'errors' counts
         """
-        imported = 0
-        duplicates = 0
-        errors = 0
-        for paper_data in paper_data_list:
-            try:
-                paper_id = self.paper_service.create_paper(paper_data)
-                if paper_id:
-                    imported += 1
-                else:
-                    duplicates += 1
-            except Exception as e:
-                errors += 1
-                logger.error(f"Failed to import {paper_data.get('arxiv_id')}: {e}")
-        return {'imported': imported, 'duplicates': duplicates, 'errors': errors}
+        result = self.paper_service.create_papers_batch(paper_data_list)
+        return {
+            'imported': result['created'],
+            'duplicates': result['duplicates'],
+            'errors': result['errors']
+        }
 
     def _fetch_with_retry(self, fetch_func, max_retries: int = 3, base_delay: float = 1.0):
         """Call fetch_func with exponential backoff retry for transient errors.

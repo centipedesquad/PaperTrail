@@ -3,8 +3,11 @@ Main window for PaperTrail application.
 Three-column layout: nav rail | paper feed | context panel.
 """
 
+import os
 import re
+import sys
 import logging
+import subprocess
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QToolBar, QStatusBar, QMessageBox, QSplitter, QLabel, QDialog, QApplication
@@ -30,7 +33,7 @@ logger = logging.getLogger(__name__)
 ARXIV_ID_PATTERN = re.compile(
     r'^(?:arxiv:)?'
     r'(\d{4}\.\d{4,5}'
-    r'|[a-z-]+/\d{7})'
+    r'|[a-z.-]+/\d{7})'
     r'(?:v\d+)?$',
     re.IGNORECASE
 )
@@ -416,7 +419,9 @@ class MainWindow(QMainWindow):
         self.arxiv_id_worker.finished.connect(
             lambda data, g=gen: self._on_arxiv_id_result(data, g)
         )
-        self.arxiv_id_worker.error.connect(self._on_arxiv_id_error)
+        self.arxiv_id_worker.error.connect(
+            lambda err, g=gen: self._on_arxiv_id_error(err, g)
+        )
         self.arxiv_id_worker.start()
 
     def _on_arxiv_id_result(self, paper_data, generation: int):
@@ -434,7 +439,9 @@ class MainWindow(QMainWindow):
             self.paper_feed.show_error_message("Paper not found on arXiv")
             self._update_statusbar("Paper not found on arXiv", 3000)
 
-    def _on_arxiv_id_error(self, error: str):
+    def _on_arxiv_id_error(self, error: str, generation: int):
+        if generation != self._search_generation:
+            return  # stale error from a superseded search
         self.paper_feed.show_error_message(f"Could not reach arXiv: {error}")
         self._update_statusbar("arXiv lookup failed", 3000)
 
@@ -472,7 +479,9 @@ class MainWindow(QMainWindow):
         self.arxiv_search_worker.finished.connect(
             lambda results, g=gen: self._on_arxiv_search_results(query, results, g)
         )
-        self.arxiv_search_worker.error.connect(self._on_arxiv_search_error)
+        self.arxiv_search_worker.error.connect(
+            lambda err, g=gen: self._on_arxiv_search_error(err, g)
+        )
         self.arxiv_search_worker.start()
 
     def _on_arxiv_search_results(self, query: str, results: list, generation: int):
@@ -490,7 +499,9 @@ class MainWindow(QMainWindow):
         dialog.import_requested.connect(self._on_batch_import)
         dialog.exec()
 
-    def _on_arxiv_search_error(self, error: str):
+    def _on_arxiv_search_error(self, error: str, generation: int):
+        if generation != self._search_generation:
+            return  # stale error from a superseded search
         self.paper_feed.show_error_message(f"Could not reach arXiv.\n{error}")
         self._update_statusbar("arXiv search failed", 3000)
 
@@ -658,7 +669,6 @@ class MainWindow(QMainWindow):
         self._pop_wait_cursor()
         self._update_statusbar("Source files ready", 3000)
         # Open the downloaded path directly (works for both permanent and stream mode)
-        import subprocess, sys, os
         try:
             if os.path.exists(source_path):
                 if sys.platform == 'darwin':

@@ -14,7 +14,7 @@ def download_file(
     url: str,
     dest_path: str,
     progress_callback: Optional[Callable[[int, int], None]] = None,
-    timeout: int = 30
+    timeout: tuple = (10, 60)
 ) -> str:
     """
     Stream download a file from URL to disk with progress reporting.
@@ -23,7 +23,7 @@ def download_file(
         url: URL to download from
         dest_path: Local path to save the file
         progress_callback: Optional callback(current_bytes, total_bytes)
-        timeout: Request timeout in seconds
+        timeout: Request timeout as (connect, read) tuple in seconds
 
     Returns:
         The dest_path on success

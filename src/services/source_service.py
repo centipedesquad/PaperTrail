@@ -4,6 +4,7 @@ Handles downloading, extracting, opening, and deleting arXiv source files.
 """
 
 import os
+import sys
 import gzip
 import shutil
 import tarfile
@@ -85,6 +86,8 @@ class SourceService:
 
             return extracted
 
+        except InterruptedError:
+            raise  # Let cancellation propagate to the worker
         except Exception as e:
             logger.error(f"Failed to download source for {paper.arxiv_id}: {e}")
             return None
@@ -96,6 +99,9 @@ class SourceService:
 
         Returns path to extracted directory, or None on failure.
         """
+        # Sanitize arxiv_id for use in filenames (legacy IDs contain '/')
+        safe_id = arxiv_id.replace('/', '_')
+
         # Use a temp directory for extraction, then atomic move
         tmp_extract = extract_dir + ".tmp"
         if os.path.exists(tmp_extract):
@@ -137,18 +143,18 @@ class SourceService:
                     logger.info(f"Extracted tar.gz archive for {arxiv_id} ({extracted_count} files)")
                 except tarfile.TarError:
                     # Not a tar — try plain gzip
-                    output_path = os.path.join(tmp_extract, f"{arxiv_id}.tex")
+                    output_path = os.path.join(tmp_extract, f"{safe_id}.tex")
                     with gzip.open(archive_path, 'rb') as gz:
                         with open(output_path, 'wb') as out:
                             shutil.copyfileobj(gz, out)
                     logger.info(f"Extracted gzip file for {arxiv_id}")
             elif magic[:4] == b'%PDF':
                 # PDF as source — just copy it
-                shutil.copy2(archive_path, os.path.join(tmp_extract, f"{arxiv_id}.pdf"))
+                shutil.copy2(archive_path, os.path.join(tmp_extract, f"{safe_id}.pdf"))
                 logger.info(f"Source is PDF for {arxiv_id}")
             else:
                 # Single file (bare tex or other)
-                shutil.copy2(archive_path, os.path.join(tmp_extract, f"{arxiv_id}.tex"))
+                shutil.copy2(archive_path, os.path.join(tmp_extract, f"{safe_id}.tex"))
                 logger.info(f"Source is single file for {arxiv_id}")
 
             # Atomic move: tmp → final
@@ -172,7 +178,6 @@ class SourceService:
             return False
 
         try:
-            import sys
             if sys.platform == 'darwin':
                 subprocess.Popen(['open', source_path])
             else:
@@ -193,6 +198,15 @@ class SourceService:
             return True
 
         try:
+            # Validate path is within our data directory to prevent arbitrary deletion
+            real_path = os.path.realpath(paper.local_source_path)
+            real_sources = os.path.realpath(self.sources_dir)
+            real_cache = os.path.realpath(self.cache_dir)
+            if not (real_path.startswith(real_sources + os.sep) or
+                    real_path.startswith(real_cache + os.sep)):
+                logger.error(f"Refusing to delete path outside data directory: {real_path}")
+                return False
+
             if os.path.exists(paper.local_source_path):
                 shutil.rmtree(paper.local_source_path)
                 logger.info(f"Deleted source: {paper.local_source_path}")
