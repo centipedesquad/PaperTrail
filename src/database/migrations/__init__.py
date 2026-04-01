@@ -24,11 +24,12 @@ BEGIN
     INSERT INTO papers_fts(papers_fts, rowid, arxiv_id, title, abstract, authors)
     VALUES('delete', OLD.id, OLD.arxiv_id, OLD.title, OLD.abstract,
         COALESCE((
-            SELECT GROUP_CONCAT(a.name, ' ')
-            FROM paper_authors pa
-            JOIN authors a ON pa.author_id = a.id
-            WHERE pa.paper_id = OLD.id
-            ORDER BY pa.author_order
+            SELECT GROUP_CONCAT(name, ' ') FROM (
+                SELECT a.name FROM paper_authors pa
+                JOIN authors a ON pa.author_id = a.id
+                WHERE pa.paper_id = OLD.id
+                ORDER BY pa.author_order
+            )
         ), ''));
 END;
 
@@ -38,20 +39,22 @@ BEGIN
     INSERT INTO papers_fts(papers_fts, rowid, arxiv_id, title, abstract, authors)
     VALUES('delete', OLD.id, OLD.arxiv_id, OLD.title, OLD.abstract,
         COALESCE((
-            SELECT GROUP_CONCAT(a.name, ' ')
-            FROM paper_authors pa
-            JOIN authors a ON pa.author_id = a.id
-            WHERE pa.paper_id = OLD.id
-            ORDER BY pa.author_order
+            SELECT GROUP_CONCAT(name, ' ') FROM (
+                SELECT a.name FROM paper_authors pa
+                JOIN authors a ON pa.author_id = a.id
+                WHERE pa.paper_id = OLD.id
+                ORDER BY pa.author_order
+            )
         ), ''));
     INSERT INTO papers_fts(rowid, arxiv_id, title, abstract, authors)
     VALUES(NEW.id, NEW.arxiv_id, NEW.title, NEW.abstract,
         COALESCE((
-            SELECT GROUP_CONCAT(a.name, ' ')
-            FROM paper_authors pa
-            JOIN authors a ON pa.author_id = a.id
-            WHERE pa.paper_id = NEW.id
-            ORDER BY pa.author_order
+            SELECT GROUP_CONCAT(name, ' ') FROM (
+                SELECT a.name FROM paper_authors pa
+                JOIN authors a ON pa.author_id = a.id
+                WHERE pa.paper_id = NEW.id
+                ORDER BY pa.author_order
+            )
         ), ''));
 END;
 
@@ -64,12 +67,13 @@ BEGIN
         (SELECT title FROM papers WHERE id = NEW.paper_id),
         (SELECT abstract FROM papers WHERE id = NEW.paper_id),
         COALESCE((
-            SELECT GROUP_CONCAT(a.name, ' ')
-            FROM paper_authors pa
-            JOIN authors a ON pa.author_id = a.id
-            WHERE pa.paper_id = NEW.paper_id
-            AND pa.rowid != NEW.rowid
-            ORDER BY pa.author_order
+            SELECT GROUP_CONCAT(name, ' ') FROM (
+                SELECT a.name FROM paper_authors pa
+                JOIN authors a ON pa.author_id = a.id
+                WHERE pa.paper_id = NEW.paper_id
+                AND pa.rowid != NEW.rowid
+                ORDER BY pa.author_order
+            )
         ), ''));
     INSERT INTO papers_fts(rowid, arxiv_id, title, abstract, authors)
     VALUES(NEW.paper_id,
@@ -77,11 +81,12 @@ BEGIN
         (SELECT title FROM papers WHERE id = NEW.paper_id),
         (SELECT abstract FROM papers WHERE id = NEW.paper_id),
         COALESCE((
-            SELECT GROUP_CONCAT(a.name, ' ')
-            FROM paper_authors pa
-            JOIN authors a ON pa.author_id = a.id
-            WHERE pa.paper_id = NEW.paper_id
-            ORDER BY pa.author_order
+            SELECT GROUP_CONCAT(name, ' ') FROM (
+                SELECT a.name FROM paper_authors pa
+                JOIN authors a ON pa.author_id = a.id
+                WHERE pa.paper_id = NEW.paper_id
+                ORDER BY pa.author_order
+            )
         ), ''));
 END;
 
@@ -94,11 +99,12 @@ BEGIN
         (SELECT title FROM papers WHERE id = OLD.paper_id),
         (SELECT abstract FROM papers WHERE id = OLD.paper_id),
         COALESCE((
-            SELECT GROUP_CONCAT(a.name, ' ')
-            FROM paper_authors pa
-            JOIN authors a ON pa.author_id = a.id
-            WHERE pa.paper_id = OLD.paper_id
-            ORDER BY pa.author_order
+            SELECT GROUP_CONCAT(name, ' ') FROM (
+                SELECT a.name FROM paper_authors pa
+                JOIN authors a ON pa.author_id = a.id
+                WHERE pa.paper_id = OLD.paper_id
+                ORDER BY pa.author_order
+            )
         ), ''));
     INSERT INTO papers_fts(rowid, arxiv_id, title, abstract, authors)
     VALUES(OLD.paper_id,
@@ -106,12 +112,13 @@ BEGIN
         (SELECT title FROM papers WHERE id = OLD.paper_id),
         (SELECT abstract FROM papers WHERE id = OLD.paper_id),
         COALESCE((
-            SELECT GROUP_CONCAT(a.name, ' ')
-            FROM paper_authors pa
-            JOIN authors a ON pa.author_id = a.id
-            WHERE pa.paper_id = OLD.paper_id
-            AND pa.rowid != OLD.rowid
-            ORDER BY pa.author_order
+            SELECT GROUP_CONCAT(name, ' ') FROM (
+                SELECT a.name FROM paper_authors pa
+                JOIN authors a ON pa.author_id = a.id
+                WHERE pa.paper_id = OLD.paper_id
+                AND pa.rowid != OLD.rowid
+                ORDER BY pa.author_order
+            )
         ), ''));
 END;
 """
@@ -121,6 +128,7 @@ from database.migrations import (
     fts5_contentless,
     add_local_source_path,
     add_origin_column,
+    fix_fts5_group_concat_order,
 )
 
 # Ordered list of all migrations. Order matters for fresh databases.
@@ -129,4 +137,5 @@ MIGRATION_REGISTRY = [
     fts5_contentless,
     add_local_source_path,
     add_origin_column,
+    fix_fts5_group_concat_order,
 ]

@@ -42,7 +42,7 @@ Bugs found by **[BOTH]** models are highest confidence.
 
 ### Bug #3: GROUP_CONCAT ORDER BY Not Guaranteed in FTS5 Triggers
 
-**Status:** OPEN
+**Status:** FIXED
 **Severity:** High — FTS5 delete may miss rows with different author ordering
 **Found by:** Codex (round 4)
 
@@ -50,9 +50,9 @@ Bugs found by **[BOTH]** models are highest confidence.
 
 **User impact:** When a paper's authors are reordered or updated, the FTS5 delete command may not match the stored value. The old entry stays in the search index, causing phantom search results for papers that no longer match the query.
 
-**Fix:** Use ordered subquery: `GROUP_CONCAT(name, ' ') FROM (SELECT ... ORDER BY author_order)`.
+**Fix:** All 7 GROUP_CONCAT instances in FTS5_TRIGGER_SQL wrapped in ordered subqueries: `GROUP_CONCAT(name, ' ') FROM (SELECT ... ORDER BY author_order)`. New migration `fix_fts5_group_concat_order` drops and recreates triggers on existing databases.
 
-**Files:** `src/database/migrations/004_fix_fts5_content_sync.sql` (multiple triggers)
+**Files:** `src/database/migrations/__init__.py`, `src/database/migrations/fix_fts5_group_concat_order.py`
 
 ---
 
@@ -360,6 +360,7 @@ Grouped by how the user would experience the bug.
 | | R4-7 | ArxivClient.search_papers swallows exceptions — retry never triggers | Medium |
 | | R4-8 | Imported view search drops origin filter — shows wrong papers | Medium |
 | | R5-3 | Stale arXiv error overwrites current search UI | Medium |
+| | R6-4 | FTS5 GROUP_CONCAT ordering drift leaves phantom search results | High |
 | **Search/filter state silently lost** | | | |
 | | R1-8 | Clearing search bar resets category/date filters | Medium |
 | | R2-15 | Category refresh after fetch wipes active filters | Medium |
