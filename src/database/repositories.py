@@ -60,9 +60,11 @@ class PaperRepository:
         try:
             with self.db.transaction():
                 return self._create_inner(paper_data)
-        except sqlite3.IntegrityError:
-            logger.info(f"Duplicate paper: {paper_data.get('arxiv_id')}")
-            return None
+        except sqlite3.IntegrityError as e:
+            if 'papers.arxiv_id' in str(e):
+                logger.info(f"Duplicate paper: {paper_data.get('arxiv_id')}")
+                return None
+            raise
 
     def _create_inner(self, paper_data: dict) -> Optional[int]:
         """

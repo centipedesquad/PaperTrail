@@ -64,7 +64,7 @@ When a PDF/source download finishes, the context panel always reloads the paper 
 
 ### Bug #11: IntegrityError Catch Too Broad in create()
 
-**Status:** OPEN
+**Status:** FIXED
 **Severity:** Medium — Non-duplicate constraint errors hidden
 **Found by:** Codex (round 4)
 
@@ -72,9 +72,9 @@ When a PDF/source download finishes, the context panel always reloads the paper 
 
 **User impact:** Any database constraint violation during paper creation (NOT NULL, foreign key) is silently swallowed and logged as "Duplicate paper." Real data integrity problems are invisible to both users and developers debugging issues.
 
-**Fix:** Inspect exception for UNIQUE on `papers.arxiv_id`; re-raise others.
+**Fix:** Now checks error message for `papers.arxiv_id` before suppressing as duplicate; all other IntegrityErrors are re-raised.
 
-**Files:** `src/database/repositories.py` (line ~60)
+**Files:** `src/database/repositories.py` (line ~63)
 
 ---
 
