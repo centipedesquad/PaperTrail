@@ -74,15 +74,15 @@ Bugs found by **[BOTH]** models are highest confidence.
 
 ### Bug #5: Worker Cleanup Race — Old Worker Can Mutate UI
 
-**Status:** OPEN
+**Status:** FIXED
 **Severity:** High — Stale operations affect current UI state
 **Found by:** Codex (round 4)
 
 `_cleanup_worker()` gives up after 2s timeout, but callers overwrite the worker attribute. The old thread keeps signal connections and can later mutate UI from a stale operation.
 
-**Fix:** Return success/failure from cleanup and refuse replacement until old worker is fully disconnected.
+**Fix:** When worker doesn't stop in time, `disconnect()` severs all signal connections before clearing the attribute. The old thread runs to completion but cannot mutate UI. `deleteLater()` is not called on still-running threads per Qt safety rules.
 
-**Files:** `src/ui/main_window.py` — `_cleanup_worker()` (line ~213)
+**Files:** `src/ui/main_window.py` — `_cleanup_worker()` (line ~216)
 
 ---
 
@@ -397,6 +397,7 @@ Grouped by how the user would experience the bug.
 | | R3-7 | Source path deleted before open — cursor stuck forever | Medium |
 | | R4-3 | Corrupt DB recovery infinite recursion — stack overflow | Critical |
 | | R6-1 | Transaction lock deadlock on connect() failure — app freezes permanently | High |
+| | R6-5 | Worker cleanup race — old worker mutates UI after replacement | High |
 | **Data corruption or silent data loss** | | | |
 | | R2-3 | SQL interleaving across threads can corrupt database | Critical |
 | | R1-3 | HTTP response stream leak — sockets accumulate | High |

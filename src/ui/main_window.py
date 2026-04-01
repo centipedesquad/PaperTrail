@@ -219,8 +219,14 @@ class MainWindow(QMainWindow):
         if worker and worker.isRunning():
             worker.cancel()
             if not worker.wait(2000):
-                # Thread didn't stop — don't destroy it, let it finish naturally
-                logger.warning(f"Worker {worker_attr} did not stop in time, skipping cleanup")
+                # Thread didn't stop — disconnect signals so it can't mutate UI,
+                # but don't deleteLater() a still-running thread.
+                logger.warning(f"Worker {worker_attr} did not stop in time, disconnecting signals")
+                try:
+                    worker.disconnect()
+                except RuntimeError:
+                    pass
+                setattr(self, worker_attr, None)
                 return
         if worker:
             worker.deleteLater()
