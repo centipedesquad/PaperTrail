@@ -685,10 +685,12 @@ class MainWindow(QMainWindow):
                 logger.error(f"Source path not found: {source_path}")
         except Exception as e:
             logger.error(f"Failed to open source directory: {e}")
-        # Refresh context panel
-        paper = self.paper_service.get_paper(paper_id)
-        if paper:
-            self.context_panel.set_paper(paper)
+        # Refresh context panel only if this paper is still selected
+        if (self.context_panel.current_paper and
+                self.context_panel.current_paper.id == paper_id):
+            paper = self.paper_service.get_paper(paper_id)
+            if paper:
+                self.context_panel.set_paper(paper)
 
     def _on_source_error(self, error: str):
         self._pop_wait_cursor()
@@ -835,10 +837,12 @@ class MainWindow(QMainWindow):
         success = self.pdf_service.open_pdf(paper, pdf_path)
         if not success:
             QMessageBox.critical(self, "Error", "PDF downloaded but failed to open.")
-        # Re-fetch to reflect last_accessed update from open_pdf
-        paper = self.paper_service.get_paper(paper_id)
-        if paper:
-            self.context_panel.set_paper(paper)
+        # Re-fetch to reflect last_accessed update, only if still selected
+        if (self.context_panel.current_paper and
+                self.context_panel.current_paper.id == paper_id):
+            paper = self.paper_service.get_paper(paper_id)
+            if paper:
+                self.context_panel.set_paper(paper)
 
     def _on_pdf_error(self, error: str):
         self._pop_wait_cursor()

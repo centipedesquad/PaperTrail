@@ -48,7 +48,7 @@ No open HIGH severity bugs.
 
 ### Bug #10: PDF/Source Download Overwrites Current Context Panel Selection
 
-**Status:** OPEN
+**Status:** FIXED
 **Severity:** Medium — UI jumps back to old paper unexpectedly
 **Found by:** Codex (round 4)
 
@@ -56,9 +56,9 @@ When a PDF/source download finishes, the context panel always reloads the paper 
 
 **User impact:** If a user starts a download on paper A then navigates to paper B while waiting, the context panel jumps back to paper A when the download finishes. The user's current selection is unexpectedly overwritten.
 
-**Fix:** Only refresh context panel if the finished paper is still the selected one.
+**Fix:** Both `_on_source_finished` and `_on_pdf_finished` now check `context_panel.current_paper.id == paper_id` before refreshing the panel.
 
-**Files:** `src/ui/main_window.py` (lines ~654, ~809)
+**Files:** `src/ui/main_window.py` (lines ~688, ~841)
 
 ---
 
