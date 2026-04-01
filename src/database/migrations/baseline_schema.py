@@ -161,11 +161,14 @@ CREATE TRIGGER IF NOT EXISTS notes_fts_insert AFTER INSERT ON paper_notes BEGIN
 END;
 
 CREATE TRIGGER IF NOT EXISTS notes_fts_delete AFTER DELETE ON paper_notes BEGIN
-    DELETE FROM notes_fts WHERE rowid = OLD.id;
+    INSERT INTO notes_fts(notes_fts, rowid, note_text)
+    VALUES('delete', OLD.id, OLD.note_text);
 END;
 
 CREATE TRIGGER IF NOT EXISTS notes_fts_update AFTER UPDATE ON paper_notes BEGIN
-    UPDATE notes_fts SET note_text = NEW.note_text WHERE rowid = NEW.id;
+    INSERT INTO notes_fts(notes_fts, rowid, note_text)
+    VALUES('delete', OLD.id, OLD.note_text);
+    INSERT INTO notes_fts(rowid, note_text) VALUES (NEW.id, NEW.note_text);
 END;
 
 -- Author metrics from external sources

@@ -1,6 +1,6 @@
 # Bugs — PaperTrail
 
-*Last audited: 2026-04-01 — Round 6 by Claude (Opus 4.6)*
+*Last audited: 2026-04-01 — Round 7 by Claude (Opus 4.6)*
 
 Bugs found by **[BOTH]** models are highest confidence.
 
@@ -14,99 +14,7 @@ No open HIGH severity bugs.
 
 ## MEDIUM
 
-### Bug #7: notes_fts Uses Plain DELETE/UPDATE on External-Content FTS5
-
-**Status:** OPEN
-**Severity:** Medium — Old note terms remain searchable after edit/delete
-**Found by:** Codex (round 4)
-
-`001_initial_schema.sql` maintains `notes_fts` with plain DELETE/UPDATE against an FTS5 external-content table. Old tokens are not removed correctly.
-
-**User impact:** When a user edits or deletes a note, the old text remains searchable. Searching for a phrase from a deleted or edited note still returns that paper as a match, making search results unreliable.
-
-**Fix:** Use the same FTS5 `'delete'` + reinsert pattern used for `papers_fts`.
-
-**Files:** `src/database/migrations/001_initial_schema.sql` (lines ~174, ~178)
-
----
-
-### Bug #8: Partial PDF Downloads Leave Orphaned Files `[BOTH]`
-
-**Status:** FIXED
-**Severity:** Medium — Orphaned partial files accumulate, collision logic triggered
-**Found by:** Both (round 4)
-
-`pdf_service.py` writes directly to the final path. Cancel/failure leaves partial PDFs. Retries generate suffixed filenames because the orphan already exists.
-
-**User impact:** If a PDF download is cancelled or fails mid-stream, a partial (unreadable) file is left on disk. Retries generate suffixed filenames because the orphan already exists, so partial files accumulate and waste disk space.
-
-**Fix:** Downloads now write to a `.part` temp file. On success, `os.replace()` atomically moves it to the final path. On any failure, the `.part` file is cleaned up. Matches the pattern used in `source_service.py`.
-
-**Files:** `src/services/pdf_service.py` (line ~113)
-
----
-
-### Bug #10: PDF/Source Download Overwrites Current Context Panel Selection
-
-**Status:** FIXED
-**Severity:** Medium — UI jumps back to old paper unexpectedly
-**Found by:** Codex (round 4)
-
-When a PDF/source download finishes, the context panel always reloads the paper that initiated the download. If the user selected a different paper while waiting, the UI jumps back.
-
-**User impact:** If a user starts a download on paper A then navigates to paper B while waiting, the context panel jumps back to paper A when the download finishes. The user's current selection is unexpectedly overwritten.
-
-**Fix:** Both `_on_source_finished` and `_on_pdf_finished` now check `context_panel.current_paper.id == paper_id` before refreshing the panel.
-
-**Files:** `src/ui/main_window.py` (lines ~688, ~841)
-
----
-
-### Bug #11: IntegrityError Catch Too Broad in create()
-
-**Status:** FIXED
-**Severity:** Medium — Non-duplicate constraint errors hidden
-**Found by:** Codex (round 4)
-
-`PaperRepository.create()` catches all `sqlite3.IntegrityError` as "duplicate". Real constraint violations (NOT NULL, foreign key) are hidden.
-
-**User impact:** Any database constraint violation during paper creation (NOT NULL, foreign key) is silently swallowed and logged as "Duplicate paper." Real data integrity problems are invisible to both users and developers debugging issues.
-
-**Fix:** Now checks error message for `papers.arxiv_id` before suppressing as duplicate; all other IntegrityErrors are re-raised.
-
-**Files:** `src/database/repositories.py` (line ~63)
-
----
-
-### Bug #13: fetch_recent_papers Cross-Lists Not Filtered by Primary Category
-
-**Status:** FIXED
-**Severity:** Medium — Wrong papers shown in category fetch
-**Found by:** Codex (round 4)
-
-`fetch_recent_papers()` doesn't enforce `primary_category == category` like `fetch_new_papers()` does. Cross-listed papers leak into fetches.
-
-**User impact:** When fetching recent papers for a specific category (e.g. `cs.AI`), papers merely cross-listed into that category but primarily belonging to another field leak into the results. Users see off-topic papers mixed into their feed.
-
-**Fix:** Added `result.primary_category == category` filter matching the existing pattern in `fetch_new_papers()`.
-
-**Files:** `src/api/arxiv_client.py` (line ~108)
-
----
-
-### Bug #14: Runtime Corruption Detection Recreates DB Without Tables
-
-**Status:** FIXED
-**Severity:** Medium — Data loss + crash if corruption detected at runtime
-**Found by:** Claude (round 4)
-
-If database corruption is detected at runtime (not startup), `_handle_corrupt_database` creates a fresh DB but no migrations are triggered, leaving an empty database.
-
-**User impact:** If database corruption is detected while the app is already running, the recovery handler creates a fresh database file but never runs migrations. The result is an empty database with no tables — every subsequent operation crashes until the user manually restarts.
-
-**Fix:** Instead of silently reconnecting to an empty DB, raises RuntimeError after backing up the corrupt file. On restart, migrations run normally against the fresh database. Running migrations from inside connect() was not possible due to circular dependency.
-
-**Files:** `src/database/connection.py` — `_handle_corrupt_database()`
+No open MEDIUM severity bugs.
 
 ---
 
@@ -194,7 +102,7 @@ Version comparison uses string ordering. `"9" > "10"` in string comparison. Curr
 
 ---
 
-## Fixed Bugs — User-Facing Impact (65 total across 6 rounds)
+## Fixed Bugs — User-Facing Impact (71 total across 7 rounds)
 
 Grouped by how the user would experience the bug.
 
@@ -211,6 +119,7 @@ Grouped by how the user would experience the bug.
 | | R4-8 | Imported view search drops origin filter — shows wrong papers | Medium |
 | | R5-3 | Stale arXiv error overwrites current search UI | Medium |
 | | R6-4 | FTS5 GROUP_CONCAT ordering drift leaves phantom search results | High |
+| | R7-1 | notes_fts plain DELETE/UPDATE leaves stale tokens in search index | Medium |
 | **Search/filter state silently lost** | | | |
 | | R1-8 | Clearing search bar resets category/date filters | Medium |
 | | R2-15 | Category refresh after fetch wipes active filters | Medium |
@@ -240,6 +149,8 @@ Grouped by how the user would experience the bug.
 | | R4-5 | PDF filename collision — papers can silently overwrite each other | High |
 | | R4-9 | arXiv preview/search failures shown as "Not Found" not error | Medium |
 | | R6-3 | Batch create reports success after transaction rollback | High |
+| | R7-2 | Partial PDF downloads leave orphaned files on failure | Medium |
+| | R7-3 | Download completion overwrites current paper selection | Medium |
 | **App hangs, crashes, or cursor stuck** | | | |
 | | R2-2 | Closing app during download crashes with thread error | Critical |
 | | R2-6 | Wait cursor permanently stuck after interrupted download | High |
@@ -249,6 +160,7 @@ Grouped by how the user would experience the bug.
 | | R6-1 | Transaction lock deadlock on connect() failure — app freezes permanently | High |
 | | R6-5 | Worker cleanup race — old worker mutates UI after replacement | High |
 | | R6-6 | Clicking paper after search crashes on non-PaperCellWidget in list | High |
+| | R7-4 | Runtime corruption recovery creates empty DB without tables | Medium |
 | **Data corruption or silent data loss** | | | |
 | | R2-3 | SQL interleaving across threads can corrupt database | Critical |
 | | R1-3 | HTTP response stream leak — sockets accumulate | High |
@@ -258,6 +170,7 @@ Grouped by how the user would experience the bug.
 | | R3-5 | executemany doesn't commit — future bulk ops would lose data | Medium |
 | | R4-4 | Migration 003 prefix collision — second migration skipped | High |
 | | R4-6 | Write failures reported as duplicates — real errors hidden | High |
+| | R7-5 | IntegrityError catch too broad — hides real constraint violations | Medium |
 | **Ratings don't work correctly** | | | |
 | | R2-13 | Can't un-rate a paper — old values persist | Medium |
 | | R3-9 | Cleared ratings still show paper as "Rated" in filters | Medium |
@@ -266,6 +179,7 @@ Grouped by how the user would experience the bug.
 | | R2-7 | Failed categories silently skipped — looks like no new papers | High |
 | | R2-8 | Legacy IDs (hep-th/9901001) stored wrong — broken dedup/URLs | High |
 | | R2-14 | Multi-category fetch only returns first category's papers | Medium |
+| | R7-6 | fetch_recent_papers returns cross-listed papers from other fields | Medium |
 | **Security vulnerabilities** | | | |
 | | R1-4 | Malicious archive could write files outside extraction dir | High |
 | | R2-21 | SQL injection vector in reset_database table names | Medium |

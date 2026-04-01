@@ -129,6 +129,7 @@ from database.migrations import (
     add_local_source_path,
     add_origin_column,
     fix_fts5_group_concat_order,
+    fix_notes_fts_triggers,
 )
 
 # Ordered list of all migrations. Order matters for fresh databases.
@@ -138,4 +139,5 @@ MIGRATION_REGISTRY = [
     add_local_source_path,
     add_origin_column,
     fix_fts5_group_concat_order,
+    fix_notes_fts_triggers,
 ]

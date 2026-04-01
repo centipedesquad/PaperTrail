@@ -28,7 +28,7 @@ In QA mode, flag any code that doesn't match DESIGN.md.
 - Migrations are Python modules in `src/database/migrations/`, registered in the explicit `MIGRATION_REGISTRY` list in `__init__.py`. Ordering is determined by list position, not filenames.
 - Each migration exports `name`, `description`, `needs_run(conn)` (schema introspection), and `apply(conn)`. The `needs_run()` function checks actual schema state (e.g., column existence via `PRAGMA table_info`) to decide if the migration should run.
 - Some `apply()` methods use `executescript()` internally. Because `executescript()` implicitly commits, migrations cannot be wrapped in a single outer transaction. Each migration is committed individually, and `needs_run()` introspection allows retry after partial failure.
-- FTS5 contentless tables (with `content=''`) do NOT support direct UPDATE or DELETE. Use the special syntax: `INSERT INTO tbl(tbl, rowid, ...) VALUES('delete', ...)` for deletes, and delete-then-reinsert for updates. Tables with `content=tablename` (like `notes_fts`) are content-based and support normal DELETE/UPDATE. Tables without any `content=` clause are regular FTS5 tables where normal DELETE/UPDATE also work.
+- FTS5 contentless tables (with `content=''`) and external-content tables (with `content=tablename`, like `notes_fts`) do NOT support direct UPDATE or DELETE on the FTS index. Use the special syntax: `INSERT INTO tbl(tbl, rowid, ...) VALUES('delete', ...)` for deletes, and delete-then-reinsert for updates. Only regular FTS5 tables (without any `content=` clause) support normal DELETE/UPDATE.
 - The `authors` column in FTS5 is computed from joins — it does NOT exist on the `papers` table. Never use `content=papers` with an `authors` column.
 
 ## Thread Safety
