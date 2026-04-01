@@ -68,7 +68,7 @@ open dist/PaperTrail.app
 ## Application Bundle Details
 
 - **Bundle Identifier**: com.papertrail.app
-- **Version**: 0.7.0
+- **Version**: 0.7.1
 - **Size**: ~146 MB
 - **Architecture**: Matches host Python (Apple Silicon or Intel — see note below)
 - **Minimum macOS**: 11 (Big Sur)
@@ -155,7 +155,7 @@ For easier distribution, you can create a DMG file:
 brew install create-dmg
 create-dmg --volname "PaperTrail" --window-size 600 400 --icon-size 100 \
   --icon "PaperTrail.app" 175 120 --app-drop-link 425 120 \
-  "PaperTrail-0.7.0.dmg" "dist/"
+  "PaperTrail-0.7.1.dmg" "dist/"
 ```
 
 This creates a drag-and-drop installer DMG.

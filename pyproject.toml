@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "papertrail"
-version = "0.7.0"
+version = "0.7.1"
 description = "Desktop application for managing and organizing arXiv papers"
 requires-python = ">=3.10"
 license = "AGPL-3.0-only"
