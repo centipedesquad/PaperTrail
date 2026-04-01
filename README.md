@@ -8,7 +8,9 @@ A desktop application for efficiently managing and organizing arXiv papers for r
 - **Rich Metadata**: Store papers with full metadata including authors, categories, and abstracts
 - **Rating System**: Three-metric rating system (importance, comprehension, technicality)
 - **Note Taking**: Take notes directly on papers with full-text search
-- **PDF Management**: On-demand download with customizable naming patterns
+- **PDF Management**: On-demand download with customizable naming patterns, reveal in Finder
+- **Source File Download**: Download and extract arXiv LaTeX source files
+- **Smart Search**: Search your local library first, then optionally search arXiv directly
 - **Reader Integration**: Opens PDFs in configurable PDF readers
 - **Full-Text Search**: Fast FTS5-powered search across titles, abstracts, authors, and notes
 - **Advanced Filtering**: Filter by categories, date ranges, rating status, and PDF availability
@@ -109,6 +111,15 @@ When you click "View PDF" on a paper:
 - If not downloaded, you'll be asked:
   - **Download & Keep**: Save to permanent storage with custom naming
   - **Stream (Temp)**: Download to cache (cleaned on exit)
+- Use **Show in Finder** to reveal the downloaded PDF in your file manager
+
+### Managing Source Files
+
+Click "Download Source" in the context panel to download a paper's LaTeX source from arXiv:
+
+- **Download & Keep**: Extracts to permanent storage using the same naming pattern as PDFs
+- **Stream (Temp)**: Extracts to cache (cleaned on exit)
+- Once downloaded, click "Open Source" to open the source directory in your file manager
 
 ### Rating Papers
 
@@ -130,6 +141,7 @@ When you click "View PDF" on a paper:
 The left panel provides a comprehensive filter system:
 
 - **Full-text search** across titles, abstracts, and authors (powered by FTS5)
+- **arXiv search fallback**: When local results aren't enough, search arXiv directly from the feed
 - **Category filtering** with hierarchical grouping (Physics, CS, Math, etc.) and paper counts
 - **Date range** with quick presets (today, this week, this month) and custom range
 - **Rating status**: all, rated only, or unrated only
@@ -138,9 +150,11 @@ The left panel provides a comprehensive filter system:
 
 ## Configuration
 
-### PDF Naming Pattern
+### Naming Pattern
 
 Default: `[{author1}_{author2}][{title}][{arxiv_id}].pdf`
+
+This pattern is used for both PDF filenames and source download folder names.
 
 Available variables:
 
@@ -207,6 +221,7 @@ PaperTrail/
 │   │   ├── config_service.py
 │   │   ├── paper_service.py
 │   │   ├── pdf_service.py
+│   │   ├── source_service.py
 │   │   └── fetch_service.py
 │   ├── ui/                        # User interface
 │   │   ├── main_window.py
@@ -220,12 +235,14 @@ PaperTrail/
 │   │   └── dialogs/
 │   │       ├── fetch_papers_dialog.py
 │   │       ├── pdf_action_dialog.py
+│   │       ├── arxiv_search_results_dialog.py
 │   │       └── preferences_dialog.py
 │   ├── assets/                    # App resources
 │   │   └── AppIcon.icns           # Application icon
 │   └── utils/                     # Utilities
 │       ├── platform_utils.py
 │       ├── async_utils.py
+│       ├── download_utils.py
 │       └── filename_utils.py
 ├── data/                          # Runtime data (user-chosen location)
 ├── tests/                         # Test suite

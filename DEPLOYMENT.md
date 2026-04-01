@@ -26,9 +26,9 @@ The `.app` bundle is completely self-contained and includes:
 - All application code:
   - Database layer (connection, repositories, migrations)
   - API layer (arXiv client)
-  - Services layer (paper, fetch, config)
+  - Services layer (paper, fetch, config, pdf, source)
   - UI layer (widgets, dialogs, main window)
-  - Utilities (platform, async)
+  - Utilities (platform, async, download, filename)
 - Database migration scripts
 - README documentation
 
@@ -89,7 +89,7 @@ PaperTrail.app/
 
 - **Name**: PaperTrail
 - **Bundle Identifier**: com.papertrail.app
-- **Version**: 0.2.0
+- **Version**: 0.7.0
 - **Display Name**: PaperTrail
 - **Minimum macOS**: 10.13
 - **High Resolution Capable**: Yes
@@ -134,7 +134,7 @@ This means:
 ### Option 2: ZIP Archive
 ```bash
 cd dist
-zip -r PaperTrail-0.2.0.zip PaperTrail.app
+zip -r PaperTrail-0.7.0.zip PaperTrail.app
 ```
 - **Pros**: Compressed, easy to share
 - **Cons**: Users must unzip first
@@ -147,7 +147,7 @@ create-dmg --volname "PaperTrail" \
   --icon-size 100 \
   --icon "PaperTrail.app" 175 120 \
   --app-drop-link 425 120 \
-  "PaperTrail-0.2.0.dmg" "dist/"
+  "PaperTrail-0.7.0.dmg" "dist/"
 ```
 - **Pros**: Professional, drag-and-drop installer
 - **Cons**: Requires create-dmg tool
