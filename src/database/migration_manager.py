@@ -47,11 +47,12 @@ class MigrationManager:
                 logger.debug(f"Migration {migration.name}: already applied, skipping")
 
         if applied:
-            # Update informational schema version
+            # Update informational schema version based on actual schema state
+            applied_count = sum(1 for m in MIGRATION_REGISTRY if not m.needs_run(conn))
             try:
                 conn.execute(
                     "INSERT OR REPLACE INTO settings (key, value) VALUES ('schema_version', ?)",
-                    (f"{len(MIGRATION_REGISTRY):03d}",)
+                    (f"{applied_count:03d}",)
                 )
                 conn.commit()
             except Exception as e:

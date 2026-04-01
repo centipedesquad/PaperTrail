@@ -2,6 +2,44 @@
 
 All notable changes to PaperTrail are documented in this file.
 
+## v0.7.0 — 2026-04-01
+
+### Added
+
+- Smart search with arXiv fallback: when local results are empty, a "Search arXiv" button appears; when results exist, an option is appended at the bottom of the feed
+- arXiv ID search: paste an arXiv ID into the search bar to preview the paper and import it in one click
+- arXiv query search: search arXiv by keyword and browse results in a multi-select dialog for batch import
+- Source file downloads: download and extract arXiv LaTeX source archives (e-print) with permanent or cached storage
+- "Show in Finder" button to reveal downloaded PDFs in the system file manager
+- Paper origin tracking: papers are tagged as `fetch` or `search` with corresponding filter in the sidebar
+- Library counts (total and imported) displayed in the filter panel
+- New background workers: `ArxivIdWorker`, `ArxivSearchWorker`, `SourceDownloadWorker`
+- `SourceService` for the full source file lifecycle (download, extract, open, delete)
+- `ArxivSearchResultsDialog` for browsing and selectively importing arXiv search results
+- `reveal_in_file_manager()` and `get_file_manager_name()` platform utilities
+- `FilenameGenerator.generate_folder_name()` for source directories
+- `download_utils` module for shared HTTP download logic
+
+### Fixed
+
+- FTS5 `GROUP_CONCAT` ignored `ORDER BY` inside aggregate — wrapped in subqueries so author ordering is deterministic
+- Notes FTS triggers did not fire correctly on insert/delete
+- Corrupt-database recovery silently reconnected to an empty database — now raises so the app restarts cleanly
+- Transaction context manager could leak the lock on unexpected errors — now uses `with self._lock`
+- PDF downloads were not atomic — now write to a `.part` temp file and rename on success
+- Worker cleanup on timeout leaked signals — now disconnects signals before discarding the worker
+- Batch paper creation miscounted on transaction failure — error handling now resets counters
+
+### Changed
+
+- Version bumped to 0.7.0
+- Search bar now checks for arXiv ID patterns before falling back to text search
+- `search_papers()` accepts `origin` and `include_downloaded` filter parameters
+- Stale arXiv search results are rejected via a generation counter
+- Context panel groups PDF actions (open, show in finder, delete) and adds a Source section
+- README updated with smart search, source file, and arXiv fallback documentation
+- Four new database migrations: `add_local_source_path`, `add_origin_column`, `fix_fts5_group_concat_order`, `fix_notes_fts_triggers`
+
 ## v0.6.4 — 2026-03-28
 
 ### Changed

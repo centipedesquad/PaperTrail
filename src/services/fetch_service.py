@@ -154,7 +154,8 @@ class FetchService:
         try:
             paper_data = self.arxiv_client.fetch_by_arxiv_id(arxiv_id)
             if paper_data:
-                # Save to database
+                # Save to database (manual lookup = search origin)
+                paper_data['origin'] = 'search'
                 paper_id = self.paper_service.create_paper(paper_data)
                 if paper_id:
                     logger.info(f"Fetched and saved paper: {arxiv_id}")
@@ -164,6 +165,54 @@ class FetchService:
         except Exception as e:
             logger.error(f"Failed to fetch paper {arxiv_id}: {e}")
             return None
+
+    def fetch_by_arxiv_id_preview(self, arxiv_id: str) -> Optional[dict]:
+        """
+        Fetch paper metadata from arXiv by ID WITHOUT saving to database.
+        Used for preview-then-import flow.
+
+        Returns:
+            Paper data dictionary or None
+
+        Raises:
+            Exception: On network/API errors (so worker error signal fires)
+        """
+        return self.arxiv_client.fetch_by_arxiv_id(arxiv_id)
+
+    def search_arxiv(self, query: str, max_results: int = 50) -> list:
+        """
+        Search arXiv for papers matching a query string.
+        Distinct from PaperService.search_papers() which searches local DB.
+
+        Args:
+            query: Search query (supports arXiv query syntax)
+            max_results: Maximum number of results
+
+        Returns:
+            List of paper data dictionaries
+
+        Raises:
+            Exception: On network/API errors (so worker error signal fires)
+        """
+        results = self._fetch_with_retry(
+            lambda: self.arxiv_client.search_papers(query, max_results=max_results)
+        )
+        logger.info(f"arXiv search for '{query}': {len(results)} results")
+        return results
+
+    def import_papers(self, paper_data_list: list) -> dict:
+        """
+        Import multiple papers into the database in a single transaction.
+
+        Returns:
+            dict with 'imported', 'duplicates', and 'errors' counts
+        """
+        result = self.paper_service.create_papers_batch(paper_data_list)
+        return {
+            'imported': result['created'],
+            'duplicates': result['duplicates'],
+            'errors': result['errors']
+        }
 
     def _fetch_with_retry(self, fetch_func, max_retries: int = 3, base_delay: float = 1.0):
         """Call fetch_func with exponential backoff retry for transient errors.

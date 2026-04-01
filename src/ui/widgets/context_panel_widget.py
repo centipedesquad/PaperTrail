@@ -15,6 +15,7 @@ from models import Paper
 from ui.theme import get_theme_manager, FONT_MONO_STACK
 from ui.widgets.rating_widget import RatingWidget
 from ui.widgets.note_editor_widget import NoteEditorWidget
+from utils.platform_utils import get_file_manager_name
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,9 @@ class ContextPanelWidget(QWidget):
     # Signals
     view_pdf_requested = Signal(int)   # paper_id
     delete_pdf_requested = Signal(int) # paper_id
+    show_pdf_in_finder_requested = Signal(int)  # paper_id
+    view_source_requested = Signal(int)   # paper_id
+    delete_source_requested = Signal(int) # paper_id
     rating_changed = Signal(int, str, str, str)  # paper_id, importance, comprehension, technicality
     note_changed = Signal(int, str)    # paper_id, note_text
 
@@ -123,11 +127,83 @@ class ContextPanelWidget(QWidget):
         self.pdf_button.clicked.connect(self._on_view_pdf)
         detail_layout.addWidget(self.pdf_button)
 
+        detail_layout.addSpacing(4)
+
+        self.pdf_actions_row = QWidget()
+        self.pdf_actions_row.setStyleSheet("border: none;")
+        pdf_actions_layout = QHBoxLayout(self.pdf_actions_row)
+        pdf_actions_layout.setContentsMargins(0, 0, 0, 0)
+        pdf_actions_layout.setSpacing(8)
+
+        finder_label = get_file_manager_name()
+        self.show_in_finder_button = QPushButton(f"Show in {finder_label}")
+        self.show_in_finder_button.setStyleSheet(theme.get_widget_style('button_secondary'))
+        self.show_in_finder_button.clicked.connect(self._on_show_in_finder)
+        pdf_actions_layout.addWidget(self.show_in_finder_button, 2)
+
         self.delete_pdf_button = QPushButton("Delete PDF")
-        self.delete_pdf_button.setStyleSheet(theme.get_widget_style('button_secondary'))
+        self.delete_pdf_button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {theme.get_color('error')};
+                color: white;
+                border: none;
+                padding: 4px 12px;
+                border-radius: 2px;
+                font-weight: 500;
+            }}
+            QPushButton:hover {{
+                background-color: {theme.get_color('error')};
+                opacity: 0.85;
+            }}
+            QPushButton:pressed {{
+                background-color: {theme.get_color('error')};
+                opacity: 0.7;
+            }}
+        """)
         self.delete_pdf_button.clicked.connect(self._on_delete_pdf)
-        self.delete_pdf_button.setVisible(False)
-        detail_layout.addWidget(self.delete_pdf_button)
+        pdf_actions_layout.addWidget(self.delete_pdf_button, 1)
+
+        self.pdf_actions_row.setVisible(False)
+        detail_layout.addWidget(self.pdf_actions_row)
+
+        detail_layout.addSpacing(16)
+
+        # Section: Source
+        detail_layout.addWidget(self._make_section_heading("Source"))
+
+        self.source_status_label = QLabel()
+        self.source_status_label.setStyleSheet(f"border: none; margin-bottom: 8px;")
+        detail_layout.addWidget(self.source_status_label)
+
+        self.source_button = QPushButton("Download Source")
+        self.source_button.setStyleSheet(theme.get_widget_style('button_primary'))
+        self.source_button.clicked.connect(self._on_view_source)
+        detail_layout.addWidget(self.source_button)
+
+        detail_layout.addSpacing(4)
+
+        self.delete_source_button = QPushButton("Delete Source")
+        self.delete_source_button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {theme.get_color('error')};
+                color: white;
+                border: none;
+                padding: 4px 12px;
+                border-radius: 2px;
+                font-weight: 500;
+            }}
+            QPushButton:hover {{
+                background-color: {theme.get_color('error')};
+                opacity: 0.85;
+            }}
+            QPushButton:pressed {{
+                background-color: {theme.get_color('error')};
+                opacity: 0.7;
+            }}
+        """)
+        self.delete_source_button.clicked.connect(self._on_delete_source)
+        self.delete_source_button.setVisible(False)
+        detail_layout.addWidget(self.delete_source_button)
 
         detail_layout.addSpacing(16)
 
@@ -213,7 +289,7 @@ class ContextPanelWidget(QWidget):
                 margin-bottom: 8px;
             """)
             self.pdf_button.setText("Open PDF")
-            self.delete_pdf_button.setVisible(True)
+            self.pdf_actions_row.setVisible(True)
         else:
             self.pdf_status_label.setText("Not downloaded")
             self.pdf_status_label.setStyleSheet(f"""
@@ -222,7 +298,31 @@ class ContextPanelWidget(QWidget):
                 margin-bottom: 8px;
             """)
             self.pdf_button.setText("View PDF")
-            self.delete_pdf_button.setVisible(False)
+            self.pdf_actions_row.setVisible(False)
+
+        # Source status
+        has_source = paper.local_source_path and os.path.exists(paper.local_source_path)
+        if has_source:
+            self.source_status_label.setText("Downloaded")
+            self.source_status_label.setStyleSheet(f"""
+                color: {theme.get_color('success')};
+                background: {theme.get_color('success_light')};
+                padding: 4px 8px;
+                border-radius: 2px;
+                border: none;
+                margin-bottom: 8px;
+            """)
+            self.source_button.setText("Open Source")
+            self.delete_source_button.setVisible(True)
+        else:
+            self.source_status_label.setText("Not downloaded")
+            self.source_status_label.setStyleSheet(f"""
+                color: {theme.get_color('text_tertiary')};
+                border: none;
+                margin-bottom: 8px;
+            """)
+            self.source_button.setText("Download Source")
+            self.delete_source_button.setVisible(False)
 
         # Notes
         if paper.notes and paper.notes.note_text:
@@ -245,6 +345,18 @@ class ContextPanelWidget(QWidget):
     def _on_delete_pdf(self):
         if self.current_paper:
             self.delete_pdf_requested.emit(self.current_paper.id)
+
+    def _on_show_in_finder(self):
+        if self.current_paper:
+            self.show_pdf_in_finder_requested.emit(self.current_paper.id)
+
+    def _on_view_source(self):
+        if self.current_paper:
+            self.view_source_requested.emit(self.current_paper.id)
+
+    def _on_delete_source(self):
+        if self.current_paper:
+            self.delete_source_requested.emit(self.current_paper.id)
 
     def _on_rating_changed(self, importance, comprehension, technicality):
         if self.current_paper:

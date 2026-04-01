@@ -20,6 +20,7 @@ from services.config_service import ConfigService
 from services.paper_service import PaperService
 from services.fetch_service import FetchService
 from services.pdf_service import PDFService
+from services.source_service import SourceService
 from utils.platform_utils import get_default_data_dir, cleanup_cache_dir, ensure_directory_exists
 from ui.main_window import MainWindow
 from ui.theme import get_theme_manager, ThemeMode
@@ -213,6 +214,7 @@ def main():
         paper_service = PaperService(db)
         fetch_service = FetchService(paper_service)
         pdf_service = PDFService(config_service, paper_service)
+        source_service = SourceService(config_service, paper_service)
 
         # Apply font size setting
         base_font_size = config_service.get_font_size()
@@ -232,7 +234,8 @@ def main():
         logger.info(f"Applied {theme_preference} theme")
 
         # Create and show main window
-        main_window = MainWindow(config_service, paper_service, fetch_service, pdf_service)
+        main_window = MainWindow(config_service, paper_service, fetch_service, pdf_service,
+                                 source_service=source_service)
         main_window.show()
 
         # Run application

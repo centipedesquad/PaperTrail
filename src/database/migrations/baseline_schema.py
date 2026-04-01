@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS papers (
     publication_date TEXT NOT NULL,
     pdf_url TEXT NOT NULL,
     local_pdf_path TEXT,
+    local_source_path TEXT,
     version TEXT,
     comment TEXT,
     journal_ref TEXT,
@@ -31,12 +32,14 @@ CREATE TABLE IF NOT EXISTS papers (
     date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_accessed TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    origin TEXT NOT NULL DEFAULT 'fetch'
 );
 
 CREATE INDEX IF NOT EXISTS idx_papers_arxiv_id ON papers(arxiv_id);
 CREATE INDEX IF NOT EXISTS idx_papers_publication_date ON papers(publication_date);
 CREATE INDEX IF NOT EXISTS idx_papers_date_added ON papers(date_added);
+CREATE INDEX IF NOT EXISTS idx_papers_origin ON papers(origin);
 
 -- Authors table with normalized names
 CREATE TABLE IF NOT EXISTS authors (
@@ -158,11 +161,14 @@ CREATE TRIGGER IF NOT EXISTS notes_fts_insert AFTER INSERT ON paper_notes BEGIN
 END;
 
 CREATE TRIGGER IF NOT EXISTS notes_fts_delete AFTER DELETE ON paper_notes BEGIN
-    DELETE FROM notes_fts WHERE rowid = OLD.id;
+    INSERT INTO notes_fts(notes_fts, rowid, note_text)
+    VALUES('delete', OLD.id, OLD.note_text);
 END;
 
 CREATE TRIGGER IF NOT EXISTS notes_fts_update AFTER UPDATE ON paper_notes BEGIN
-    UPDATE notes_fts SET note_text = NEW.note_text WHERE rowid = NEW.id;
+    INSERT INTO notes_fts(notes_fts, rowid, note_text)
+    VALUES('delete', OLD.id, OLD.note_text);
+    INSERT INTO notes_fts(rowid, note_text) VALUES (NEW.id, NEW.note_text);
 END;
 
 -- Author metrics from external sources

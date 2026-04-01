@@ -115,8 +115,12 @@ class DatabaseConnection:
                     f"Cannot recover corrupt database — failed to remove {self.db_path}: {e}"
                 ) from e
 
-            # Reconnect to a fresh database (connect() will re-apply all PRAGMAs)
-            self.connect()
+            # Don't reconnect here — the fresh DB has no tables and migrations
+            # can't run from inside connect(). Raise so the app restarts cleanly.
+            raise RuntimeError(
+                "Database was corrupt and has been backed up. "
+                "Please restart the application."
+            )
         finally:
             self._recovering = False
 
@@ -219,19 +223,18 @@ class DatabaseConnection:
                 db.execute("INSERT ...")
                 db.execute("UPDATE ...")
         """
-        self._lock.acquire()
-        conn = self.connect()
-        self._in_transaction = True
-        try:
-            yield conn
-            conn.commit()
-        except Exception as e:
-            conn.rollback()
-            logger.error(f"Transaction failed: {e}")
-            raise
-        finally:
-            self._in_transaction = False
-            self._lock.release()
+        with self._lock:
+            conn = self.connect()
+            self._in_transaction = True
+            try:
+                yield conn
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"Transaction failed: {e}")
+                raise
+            finally:
+                self._in_transaction = False
 
     def vacuum(self):
         """

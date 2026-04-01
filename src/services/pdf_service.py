@@ -108,23 +108,31 @@ class PDFService:
                 filename = f"{safe_id}.pdf"
                 pdf_path = os.path.join(self.cache_dir, filename)
 
-            # Download
+            # Download to temp file, atomic rename on success
             logger.info(f"Downloading PDF from {paper.pdf_url}")
+            part_path = pdf_path + '.part'
 
-            with requests.get(paper.pdf_url, stream=True, timeout=30) as response:
-                response.raise_for_status()
+            try:
+                with requests.get(paper.pdf_url, stream=True, timeout=30) as response:
+                    response.raise_for_status()
 
-                total_size = int(response.headers.get('content-length', 0))
-                downloaded = 0
+                    total_size = int(response.headers.get('content-length', 0))
+                    downloaded = 0
 
-                with open(pdf_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
-                            downloaded += len(chunk)
+                    with open(part_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+                                downloaded += len(chunk)
 
-                            if progress_callback:
-                                progress_callback(downloaded, total_size)
+                                if progress_callback:
+                                    progress_callback(downloaded, total_size)
+
+                os.replace(part_path, pdf_path)
+            except BaseException:
+                if os.path.exists(part_path):
+                    os.remove(part_path)
+                raise
 
             logger.info(f"PDF downloaded to: {pdf_path}")
 
