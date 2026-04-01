@@ -10,7 +10,7 @@ Bugs found by **[BOTH]** models are highest confidence.
 
 ### Bug #1: Transaction Lock Deadlock on connect() Failure
 
-**Status:** OPEN
+**Status:** FIXED
 **Severity:** High — App freezes permanently
 **Found by:** Codex (round 4)
 
@@ -18,7 +18,7 @@ Bugs found by **[BOTH]** models are highest confidence.
 
 **User impact:** If the database connection drops (e.g. disk full, file locked), the app freezes permanently. Every subsequent database operation queues behind a lock that will never be released. The only recovery is force-quitting.
 
-**Fix:** Move `connect()` inside the `try/finally` block, or use `with self._lock:`.
+**Fix:** Replaced explicit `acquire()`/`release()` with `with self._lock:` context manager, matching the pattern used by adjacent methods. `connect()` is now inside the guarded block, so any exception always releases the lock.
 
 **Files:** `src/database/connection.py` — `transaction()` (line ~222)
 
@@ -394,6 +394,7 @@ Grouped by how the user would experience the bug.
 | | R3-4 | Replacing blocked worker can destroy live thread | High |
 | | R3-7 | Source path deleted before open — cursor stuck forever | Medium |
 | | R4-3 | Corrupt DB recovery infinite recursion — stack overflow | Critical |
+| | R6-1 | Transaction lock deadlock on connect() failure — app freezes permanently | High |
 | **Data corruption or silent data loss** | | | |
 | | R2-3 | SQL interleaving across threads can corrupt database | Critical |
 | | R1-3 | HTTP response stream leak — sockets accumulate | High |

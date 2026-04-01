@@ -219,19 +219,18 @@ class DatabaseConnection:
                 db.execute("INSERT ...")
                 db.execute("UPDATE ...")
         """
-        self._lock.acquire()
-        conn = self.connect()
-        self._in_transaction = True
-        try:
-            yield conn
-            conn.commit()
-        except Exception as e:
-            conn.rollback()
-            logger.error(f"Transaction failed: {e}")
-            raise
-        finally:
-            self._in_transaction = False
-            self._lock.release()
+        with self._lock:
+            conn = self.connect()
+            self._in_transaction = True
+            try:
+                yield conn
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"Transaction failed: {e}")
+                raise
+            finally:
+                self._in_transaction = False
 
     def vacuum(self):
         """
