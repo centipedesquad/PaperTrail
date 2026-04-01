@@ -115,8 +115,12 @@ class DatabaseConnection:
                     f"Cannot recover corrupt database — failed to remove {self.db_path}: {e}"
                 ) from e
 
-            # Reconnect to a fresh database (connect() will re-apply all PRAGMAs)
-            self.connect()
+            # Don't reconnect here — the fresh DB has no tables and migrations
+            # can't run from inside connect(). Raise so the app restarts cleanly.
+            raise RuntimeError(
+                "Database was corrupt and has been backed up. "
+                "Please restart the application."
+            )
         finally:
             self._recovering = False
 

@@ -20,7 +20,7 @@ class TestDatabaseIntegrity:
         assert db._check_integrity() is True
 
     def test_corrupt_database_detected(self):
-        """Write garbage to a db file and verify integrity check catches it."""
+        """Write garbage to a db file and verify corruption raises RuntimeError."""
         db_path = tempfile.mktemp(suffix='.db')
         # Write invalid data that looks like a database but isn't
         with open(db_path, 'wb') as f:
@@ -28,11 +28,10 @@ class TestDatabaseIntegrity:
 
         db = DatabaseConnection(db_path)
         try:
-            db.connect()
-            # After connect, if the DB was corrupt it should have been
-            # backed up and replaced with a fresh one
-            # The fresh connection should work
-            assert db._connection is not None
+            with pytest.raises(RuntimeError, match="corrupt"):
+                db.connect()
+            # Corrupt file should have been backed up
+            assert os.path.exists(db_path + '.corrupt')
         finally:
             db.close()
             for f in [db_path, db_path + '.corrupt']:

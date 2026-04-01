@@ -96,7 +96,7 @@ When a PDF/source download finishes, the context panel always reloads the paper 
 
 ### Bug #14: Runtime Corruption Detection Recreates DB Without Tables
 
-**Status:** OPEN
+**Status:** FIXED
 **Severity:** Medium — Data loss + crash if corruption detected at runtime
 **Found by:** Claude (round 4)
 
@@ -104,7 +104,7 @@ If database corruption is detected at runtime (not startup), `_handle_corrupt_da
 
 **User impact:** If database corruption is detected while the app is already running, the recovery handler creates a fresh database file but never runs migrations. The result is an empty database with no tables — every subsequent operation crashes until the user manually restarts.
 
-**Fix:** Trigger migrations after recovery or raise error prompting restart.
+**Fix:** Instead of silently reconnecting to an empty DB, raises RuntimeError after backing up the corrupt file. On restart, migrations run normally against the fresh database. Running migrations from inside connect() was not possible due to circular dependency.
 
 **Files:** `src/database/connection.py` — `_handle_corrupt_database()`
 
