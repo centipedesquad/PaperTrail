@@ -8,7 +8,7 @@ import sys
 import logging
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QLineEdit, QComboBox, QSpinBox,
+    QPushButton, QLineEdit, QComboBox, QSpinBox, QCheckBox,
     QGroupBox, QFormLayout, QFileDialog, QTabWidget, QWidget
 )
 from PySide6.QtCore import Qt
@@ -176,6 +176,31 @@ class PreferencesDialog(QDialog):
         font_form.addRow("", font_help)
 
         general_layout.addWidget(font_group)
+
+        # Pruning group
+        prune_group = QGroupBox("Pruning")
+        prune_form = QFormLayout(prune_group)
+        prune_form.setContentsMargins(16, 20, 16, 16)
+        prune_form.setSpacing(12)
+        prune_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+
+        self.auto_prune_check = QCheckBox("Auto-prune at startup")
+        prune_form.addRow("", self.auto_prune_check)
+
+        self.prune_days_spin = QSpinBox()
+        self.prune_days_spin.setMinimum(7)
+        self.prune_days_spin.setMaximum(365)
+        self.prune_days_spin.setValue(30)
+        self.prune_days_spin.setSuffix(" days")
+        self.prune_days_spin.setMinimumWidth(100)
+        prune_form.addRow("Prune papers older than:", self.prune_days_spin)
+
+        prune_help = QLabel("Removes batch-fetched papers with no saved PDF older than the threshold")
+        prune_help.setWordWrap(True)
+        prune_help.setStyleSheet(f"color: {theme.get_color('text_secondary')}; font-size: 10pt; font-style: italic;")
+        prune_form.addRow("", prune_help)
+
+        general_layout.addWidget(prune_group)
         general_layout.addStretch()
 
         tabs.addTab(general_tab, "General")
@@ -383,6 +408,10 @@ class PreferencesDialog(QDialog):
 
         self.recent_days_spin.setValue(self.config_service.get_recent_days())
 
+        # Prune settings
+        self.auto_prune_check.setChecked(self.config_service.get_auto_prune_enabled())
+        self.prune_days_spin.setValue(self.config_service.get_prune_days())
+
     def _save_settings(self):
         """Save settings from UI to config."""
         try:
@@ -416,6 +445,10 @@ class PreferencesDialog(QDialog):
             self.config_service.set_fetch_mode(self.fetch_mode_combo.currentData())
             self.config_service.set_recent_days(self.recent_days_spin.value())
 
+            # Prune settings
+            self.config_service.set_auto_prune_enabled(self.auto_prune_check.isChecked())
+            self.config_service.set_prune_days(self.prune_days_spin.value())
+
             logger.info("Settings saved successfully")
             self.accept()
 
@@ -438,6 +471,8 @@ class PreferencesDialog(QDialog):
         self.max_results_spin.setValue(50)
         self.fetch_mode_combo.setCurrentIndex(0)  # New
         self.recent_days_spin.setValue(7)
+        self.auto_prune_check.setChecked(False)
+        self.prune_days_spin.setValue(30)
 
     def _show_in_finder(self, path: str):
         """Open a directory in the system file manager."""

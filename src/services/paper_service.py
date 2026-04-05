@@ -197,3 +197,11 @@ class PaperService:
     def delete_rating(self, paper_id: int):
         """Delete rating for a paper."""
         self.ratings_repo.delete(paper_id)
+
+    def delete_paper(self, paper_id: int) -> bool:
+        """Delete a paper and all associated data."""
+        return self.paper_repo.delete(paper_id)
+
+    def prune_papers(self, max_age_days: int = 30) -> int:
+        """Prune old fetched papers without saved PDFs. Returns count deleted."""
+        return self.paper_repo.prune(max_age_days)

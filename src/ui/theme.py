@@ -80,6 +80,8 @@ LIGHT_PALETTE = ColorPalette({
 
     # Special states
     'error': '#BE123C',               # Rose-700
+    'error_hover': '#9F1239',         # Rose-800
+    'error_pressed': '#881337',       # Rose-900
     'info': '#0369A1',                # Sky-700
     'disabled': '#D6D3D1',            # Stone-300
 })
@@ -124,6 +126,8 @@ DARK_PALETTE = ColorPalette({
 
     # Special states
     'error': '#FB7185',               # Rose-400
+    'error_hover': '#F43F5E',         # Rose-500
+    'error_pressed': '#E11D48',       # Rose-600
     'info': '#38BDF8',                # Sky-400
     'disabled': '#57534E',            # Stone-600
 })

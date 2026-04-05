@@ -8,7 +8,7 @@ import os
 import logging
 from pathlib import Path
 from PySide6.QtWidgets import QApplication, QMessageBox, QFileDialog
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont
 
 # Add src directory to path
@@ -240,6 +240,9 @@ def main():
         main_window = MainWindow(config_service, paper_service, fetch_service, pdf_service,
                                  source_service=source_service)
         main_window.show()
+
+        # Defer auto-prune to after the event loop starts
+        QTimer.singleShot(0, main_window.auto_prune)
 
         # Run application
         result = app.exec()
