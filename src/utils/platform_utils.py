@@ -151,6 +151,35 @@ def reveal_in_file_manager(file_path: str) -> bool:
         return False
 
 
+def open_directory(dir_path: str) -> bool:
+    """
+    Open a directory in the platform's file manager.
+
+    Args:
+        dir_path: Path to the directory to open
+
+    Returns:
+        True if successful, False otherwise
+    """
+    if not os.path.exists(dir_path):
+        logger.error(f"Directory not found: {dir_path}")
+        return False
+
+    system = get_platform()
+
+    try:
+        if system == 'macos':
+            subprocess.Popen(['open', dir_path])
+        else:
+            subprocess.Popen(['xdg-open', dir_path])
+
+        logger.info(f"Opened directory: {dir_path}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to open directory: {e}")
+        return False
+
+
 def get_file_manager_name() -> str:
     """Get the platform-specific name for the file manager."""
     system = get_platform()

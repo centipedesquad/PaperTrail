@@ -6,6 +6,7 @@ Manages application settings stored in database.
 import logging
 from typing import Optional, Dict, Any
 from database.connection import DatabaseConnection
+from utils.library_migration import read_config, write_config
 
 logger = logging.getLogger(__name__)
 
@@ -184,3 +185,20 @@ class ConfigService:
     def set_font_size(self, size: int):
         """Set base font size."""
         self.set('font_size', str(size))
+
+    def get_files_location(self) -> Optional[str]:
+        """Get files location (PDFs + sources) from config file.
+        Falls back to database_location if not separately configured."""
+        try:
+            _, files_dir = read_config()
+            return files_dir
+        except (FileNotFoundError, ValueError):
+            return self.get_database_location()
+
+    def set_files_location(self, location: str):
+        """Set files location in the config file."""
+        try:
+            db_dir, _ = read_config()
+        except (FileNotFoundError, ValueError):
+            db_dir = self.get_database_location() or location
+        write_config(db_dir, location)

@@ -81,22 +81,26 @@ def migrate_legacy_names():
                 logger.info(f"Migrated data dir: {data_dir} -> {new_data_dir}")
 
 
-def get_or_create_data_dir() -> str:
+def get_or_create_data_dir():
     """
-    Get or create data directory.
+    Get or create data directories.
     On first run, prompts user to choose location.
 
     Returns:
-        Path to data directory
+        (db_dir, files_dir) tuple
     """
-    # Check if we have a saved data directory location
-    config_file = Path.home() / ".papertrail_config"
+    from utils.library_migration import read_config, write_config
 
-    if config_file.exists():
-        with open(config_file, 'r') as f:
-            saved_path = f.read().strip()
-            if os.path.exists(saved_path):
-                return saved_path
+    try:
+        db_dir, files_dir = read_config()
+        if os.path.exists(db_dir):
+            # Ensure files_dir structure exists on startup
+            ensure_directory_exists(files_dir)
+            ensure_directory_exists(os.path.join(files_dir, "pdfs"))
+            ensure_directory_exists(os.path.join(files_dir, "cache"))
+            return db_dir, files_dir
+    except (FileNotFoundError, ValueError):
+        pass
 
     # First run - ask user to choose location
     default_dir = get_default_data_dir()
@@ -139,11 +143,10 @@ def get_or_create_data_dir() -> str:
     ensure_directory_exists(os.path.join(data_dir, "cache"))
 
     # Save choice
-    with open(config_file, 'w') as f:
-        f.write(data_dir)
+    write_config(data_dir, data_dir)
 
     logger.info(f"Data directory: {data_dir}")
-    return data_dir
+    return data_dir, data_dir
 
 
 def initialize_database_schema(data_dir: str):
@@ -201,16 +204,16 @@ def main():
     app.setOrganizationName("PaperTrail")
 
     try:
-        # Get or create data directory
-        data_dir = get_or_create_data_dir()
+        # Get or create data directories
+        db_dir, files_dir = get_or_create_data_dir()
 
         # Initialize database
-        initialize_database_schema(data_dir)
+        initialize_database_schema(db_dir)
 
         # Initialize services
         db = get_database()
         config_service = ConfigService(db)
-        config_service.set_database_location(data_dir)
+        config_service.set_database_location(db_dir)
         paper_service = PaperService(db)
         fetch_service = FetchService(paper_service)
         pdf_service = PDFService(config_service, paper_service)
@@ -242,7 +245,7 @@ def main():
         result = app.exec()
 
         # Cleanup on exit
-        cleanup_on_exit(data_dir)
+        cleanup_on_exit(files_dir)
 
         logger.info("Application exited normally")
         return result

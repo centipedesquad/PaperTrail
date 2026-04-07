@@ -1,6 +1,12 @@
+<p align="center">
+  <img src="src/assets/AppIcon.png" width="128" alt="PaperTrail icon">
+</p>
+
 # PaperTrail - arXiv Paper Management Application
 
 A desktop application for efficiently managing and organizing arXiv papers for research workflows.
+
+![PaperTrail](docs/images/screenshot.png)
 
 ## Features
 
@@ -16,6 +22,7 @@ A desktop application for efficiently managing and organizing arXiv papers for r
 - **Advanced Filtering**: Filter by categories, date ranges, rating status, and PDF availability
 - **Theme Support**: Light and dark mode with Ctrl+T toggle
 - **Preferences Dialog**: Configurable theme, font size, PDF settings, and fetch defaults
+- **Library Management**: Relocate, export, or merge libraries with split database/files paths
 - **Hierarchical Categories**: Smart grouping of arXiv categories by field (Physics, CS, Math, etc.)
 - **Cross-Platform**: Works on macOS and Linux
 
@@ -23,7 +30,7 @@ A desktop application for efficiently managing and organizing arXiv papers for r
 
 ### Preparation
 
-The run and build scripts will automatically create a `.venv` if one is not found, so no additional tooling is strictly required beyond Python 3.10+. However, using `[uv](https://docs.astral.sh/uv/getting-started/installation/)` is recommended for faster, reproducible dependency management. If you use another virtual environment manager, ensure the environment is placed in a local `.venv/` folder.
+The run and build scripts will automatically create a `.venv` if one is not found, so no additional tooling is strictly required beyond Python 3.10+. However, using [`uv`](https://docs.astral.sh/uv/getting-started/installation/) is recommended for faster, reproducible dependency management. If you use another virtual environment manager, ensure the environment is placed in a local `.venv/` folder.
 
 ### Option 1: Pre-built Application (Recommended for macOS)
 
@@ -92,9 +99,11 @@ On first run, you'll be prompted to choose a data directory location. This is wh
 
 You can choose the default location or select a custom directory (e.g., in your cloud sync folder).
 
+You can change this location later from Preferences > Storage.
+
 ### Fetching Papers
 
-1. Click "Fetch Papers" in the toolbar
+1. Click "Fetch Papers" in the toolbar (or press `Ctrl+Shift+F`)
 2. Select arXiv categories (e.g., hep-th, cs.AI, gr-qc)
 3. Choose fetch mode:
   - **New**: Today's new submissions
@@ -121,32 +130,45 @@ Click "Download Source" in the context panel to download a paper's LaTeX source 
 - **Stream (Temp)**: Extracts to cache (cleaned on exit)
 - Once downloaded, click "Open Source" to open the source directory in your file manager
 
+### Application Layout
+
+The interface uses a three-panel layout:
+
+1. **Navigation Rail** (left) — Library views (All Papers, Recent, Unread, Rated, Imported), category filters with paper counts
+2. **Paper Feed** (center) — Search bar, sort options, scrollable list of paper cards
+3. **Context Panel** (right) — Selected paper details, rating controls, PDF/source management, notes editor
+
 ### Rating Papers
 
-1. Expand a paper cell
-2. Click "Rate Paper"
-3. Select ratings for:
-  - **Importance**: path-breaking, good, routine, passable, meh, trash
-  - **Comprehension**: understood, partially understood, not understood
-  - **Technicality**: tough, not tough, doesn't make sense
+Select a paper in the feed, then use the rating controls in the context panel:
+
+- **Importance**: path-breaking, good, routine, passable, meh, trash
+- **Comprehension**: understood, partially understood, not understood
+- **Technicality**: tough, not tough, doesn't make sense
 
 ### Taking Notes
 
-1. Expand a paper cell
-2. Click "Add/Edit Notes"
-3. Type your notes (auto-saves after 2 seconds)
+Select a paper and use the notes editor in the context panel. Notes auto-save after 2 seconds of inactivity.
 
 ### Searching & Filtering
 
-The left panel provides a comprehensive filter system:
-
-- **Full-text search** across titles, abstracts, and authors (powered by FTS5)
+- **Full-text search** across titles, abstracts, and authors (powered by FTS5) via the search bar in the feed
 - **arXiv search fallback**: When local results aren't enough, search arXiv directly from the feed
-- **Category filtering** with hierarchical grouping (Physics, CS, Math, etc.) and paper counts
-- **Date range** with quick presets (today, this week, this month) and custom range
-- **Rating status**: all, rated only, or unrated only
-- **PDF availability**: all, has PDF, or no PDF
+- **Category filtering** in the navigation rail with hierarchical grouping (Physics, CS, Math, etc.) and paper counts
+- **Library views**: All Papers, Recent, Unread, Rated, Imported
 - **Sort by**: newest first, oldest first, title A-Z, or title Z-A
+
+### Managing Your Library
+
+You can relocate or merge your library after initial setup via **Preferences > Storage**.
+
+Three migration modes are available:
+
+- **Export**: Copies your database and files to new locations. The originals are preserved so you can verify before deleting them.
+- **Create New**: Starts a fresh, empty library at the chosen locations.
+- **Merge**: Merges your current papers into an existing library at the destination. When duplicates are found (by arXiv ID), you can choose to keep the existing version, keep the incoming version, or keep both.
+
+The database and files directories can point to different locations (e.g., database on a fast local drive, PDFs in a synced folder). After a migration, previous library paths are shown in the Storage tab for easy cleanup.
 
 ## Configuration
 
@@ -182,16 +204,19 @@ Access via **File > Preferences** (or Cmd+, on macOS):
 - **General**: Theme (light/dark), font size (8-20pt)
 - **PDF**: Reader path, default download behavior (ask/download/stream), naming pattern
 - **Fetching**: Max results per category, default fetch mode, number of recent days
+- **Storage**: Current library locations, change library location, previous library cleanup
 
 ### Keyboard Shortcuts
 
 
-| Shortcut           | Action                  |
-| ------------------ | ----------------------- |
-| `Ctrl+T`           | Toggle light/dark theme |
-| `Ctrl+F`           | Fetch papers            |
-| `Cmd+,` / `Ctrl+,` | Open Preferences        |
-| `Cmd+Q` / `Ctrl+Q` | Quit                    |
+| Shortcut            | Action                  |
+| ------------------- | ----------------------- |
+| `Ctrl+T`            | Toggle light/dark theme |
+| `Ctrl+F`            | Focus search bar        |
+| `Ctrl+Shift+F`      | Fetch papers            |
+| `F5` / `Ctrl+R`     | Refresh paper list      |
+| `Cmd+,` / `Ctrl+,`  | Open Preferences        |
+| `Cmd+Q` / `Ctrl+Q`  | Quit                    |
 
 
 ## Documentation
@@ -227,6 +252,7 @@ PaperTrail/
 │   │   ├── widgets/
 │   │   │   ├── paper_cell_widget.py
 │   │   │   ├── paper_feed_widget.py
+│   │   │   ├── context_panel_widget.py
 │   │   │   ├── filter_panel_widget.py
 │   │   │   ├── rating_widget.py
 │   │   │   └── note_editor_widget.py
@@ -234,14 +260,18 @@ PaperTrail/
 │   │       ├── fetch_papers_dialog.py
 │   │       ├── pdf_action_dialog.py
 │   │       ├── arxiv_search_results_dialog.py
+│   │       ├── change_library_dialog.py
+│   │       ├── merge_conflict_dialog.py
 │   │       └── preferences_dialog.py
 │   ├── assets/                    # App resources
-│   │   └── AppIcon.icns           # Application icon
+│   │   ├── AppIcon.icns           # Application icon
+│   │   └── fonts/                 # Bundled fonts (Source Serif 4, DM Sans, JetBrains Mono)
 │   └── utils/                     # Utilities
 │       ├── platform_utils.py
 │       ├── async_utils.py
 │       ├── download_utils.py
-│       └── filename_utils.py
+│       ├── filename_utils.py
+│       └── library_migration.py
 ├── data/                          # Runtime data (user-chosen location)
 ├── tests/                         # Test suite
 └── pyproject.toml

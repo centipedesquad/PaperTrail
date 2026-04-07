@@ -3,6 +3,8 @@ Preferences dialog.
 Allows users to configure application settings.
 """
 
+import os
+import sys
 import logging
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
@@ -44,6 +46,93 @@ class PreferencesDialog(QDialog):
 
         # Create tab widget for different categories
         tabs = QTabWidget()
+
+        # Storage tab
+        storage_tab = QWidget()
+        storage_layout = QVBoxLayout(storage_tab)
+        storage_layout.setContentsMargins(16, 16, 16, 16)
+        storage_layout.setSpacing(16)
+
+        # Current locations group
+        locations_group = QGroupBox("Current Library Locations")
+        locations_form = QFormLayout(locations_group)
+        locations_form.setContentsMargins(16, 20, 16, 16)
+        locations_form.setSpacing(12)
+        locations_form.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
+
+        # Database path
+        db_row = QHBoxLayout()
+        db_row.setSpacing(8)
+        self._storage_db_label = QLineEdit()
+        self._storage_db_label.setReadOnly(True)
+        self._storage_db_label.setMinimumWidth(300)
+        db_row.addWidget(self._storage_db_label)
+        db_finder_btn = QPushButton("Show in Finder" if sys.platform == 'darwin' else "Open Folder")
+        db_finder_btn.setMinimumWidth(120)
+        db_finder_btn.clicked.connect(lambda: self._show_in_finder(self._storage_db_label.text()))
+        db_row.addWidget(db_finder_btn)
+        locations_form.addRow("Database:", db_row)
+
+        # Files path
+        files_row = QHBoxLayout()
+        files_row.setSpacing(8)
+        self._storage_files_label = QLineEdit()
+        self._storage_files_label.setReadOnly(True)
+        self._storage_files_label.setMinimumWidth(300)
+        files_row.addWidget(self._storage_files_label)
+        files_finder_btn = QPushButton("Show in Finder" if sys.platform == 'darwin' else "Open Folder")
+        files_finder_btn.setMinimumWidth(120)
+        files_finder_btn.clicked.connect(lambda: self._show_in_finder(self._storage_files_label.text()))
+        files_row.addWidget(files_finder_btn)
+        locations_form.addRow("PDF & Source Files:", files_row)
+
+        storage_layout.addWidget(locations_group)
+
+        # Change location button
+        change_btn = QPushButton("Change Library Location...")
+        change_btn.setMinimumWidth(220)
+        change_btn.clicked.connect(self._open_change_library_dialog)
+        change_btn_layout = QHBoxLayout()
+        change_btn_layout.addWidget(change_btn)
+        change_btn_layout.addStretch()
+        storage_layout.addLayout(change_btn_layout)
+
+        # Previous library section (shown only if previous paths exist)
+        self._prev_group = QGroupBox("Previous Library (can be deleted)")
+        prev_layout = QVBoxLayout(self._prev_group)
+        prev_layout.setContentsMargins(16, 20, 16, 16)
+        prev_layout.setSpacing(8)
+
+        self._prev_db_row = QHBoxLayout()
+        self._prev_db_label = QLabel()
+        self._prev_db_label.setStyleSheet(
+            f"color: {theme.get_color('text_secondary')}; font-size: 12px;"
+        )
+        self._prev_db_row.addWidget(self._prev_db_label)
+        self._prev_db_finder_btn = QPushButton("Show in Finder" if sys.platform == 'darwin' else "Open Folder")
+        self._prev_db_finder_btn.setMaximumWidth(120)
+        self._prev_db_row.addWidget(self._prev_db_finder_btn)
+        prev_layout.addLayout(self._prev_db_row)
+
+        self._prev_files_row = QHBoxLayout()
+        self._prev_files_label = QLabel()
+        self._prev_files_label.setStyleSheet(
+            f"color: {theme.get_color('text_secondary')}; font-size: 12px;"
+        )
+        self._prev_files_row.addWidget(self._prev_files_label)
+        self._prev_files_finder_btn = QPushButton("Show in Finder" if sys.platform == 'darwin' else "Open Folder")
+        self._prev_files_finder_btn.setMaximumWidth(120)
+        self._prev_files_row.addWidget(self._prev_files_finder_btn)
+        prev_layout.addLayout(self._prev_files_row)
+
+        dismiss_btn = QPushButton("Dismiss")
+        dismiss_btn.setMaximumWidth(100)
+        dismiss_btn.clicked.connect(self._dismiss_previous_paths)
+        prev_layout.addWidget(dismiss_btn)
+
+        storage_layout.addWidget(self._prev_group)
+
+        storage_layout.addStretch()
 
         # General tab
         general_tab = QWidget()
@@ -198,6 +287,8 @@ class PreferencesDialog(QDialog):
 
         tabs.addTab(fetch_tab, "Fetching")
 
+        tabs.addTab(storage_tab, "Storage")
+
         layout.addWidget(tabs)
 
         # Buttons
@@ -222,6 +313,41 @@ class PreferencesDialog(QDialog):
 
     def _load_settings(self):
         """Load current settings into UI."""
+        # Storage paths
+        try:
+            from utils.library_migration import read_config, read_previous_paths
+            db_dir, files_dir = read_config()
+            self._storage_db_label.setText(db_dir)
+            self._storage_files_label.setText(files_dir)
+
+            prev_db, prev_files = read_previous_paths()
+            if prev_db or prev_files:
+                self._prev_group.setVisible(True)
+                if prev_db:
+                    self._prev_db_label.setText(f"Database: {prev_db}")
+                    self._prev_db_finder_btn.clicked.connect(
+                        lambda checked=False, p=prev_db: self._show_in_finder(p)
+                    )
+                else:
+                    self._prev_db_label.setVisible(False)
+                    self._prev_db_finder_btn.setVisible(False)
+
+                if prev_files:
+                    self._prev_files_label.setText(f"Files: {prev_files}")
+                    self._prev_files_finder_btn.clicked.connect(
+                        lambda checked=False, p=prev_files: self._show_in_finder(p)
+                    )
+                else:
+                    self._prev_files_label.setVisible(False)
+                    self._prev_files_finder_btn.setVisible(False)
+            else:
+                self._prev_group.setVisible(False)
+        except (FileNotFoundError, ValueError):
+            db_loc = self.config_service.get_database_location() or ""
+            self._storage_db_label.setText(db_loc)
+            self._storage_files_label.setText(db_loc)
+            self._prev_group.setVisible(False)
+
         # Theme
         theme = self.config_service.get_theme()
         index = self.theme_combo.findData(theme)
@@ -313,9 +439,27 @@ class PreferencesDialog(QDialog):
         self.fetch_mode_combo.setCurrentIndex(0)  # New
         self.recent_days_spin.setValue(7)
 
+    def _show_in_finder(self, path: str):
+        """Open a directory in the system file manager."""
+        if not path:
+            return
+        from utils.platform_utils import open_directory
+        open_directory(path)
+
+    def _open_change_library_dialog(self):
+        """Open the Change Library Location dialog."""
+        from ui.dialogs.change_library_dialog import ChangeLibraryDialog
+        dialog = ChangeLibraryDialog(self.config_service, self.parent())
+        dialog.exec()
+
+    def _dismiss_previous_paths(self):
+        """Remove previous library path info from config."""
+        from utils.library_migration import dismiss_previous_paths
+        dismiss_previous_paths()
+        self._prev_group.setVisible(False)
+
     def _browse_reader(self):
         """Browse for PDF reader application."""
-        import sys
         if sys.platform == 'darwin':
             start_dir = '/Applications'
             filter_str = 'Applications (*.app);;All Files (*)'

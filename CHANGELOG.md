@@ -2,6 +2,22 @@
 
 All notable changes to PaperTrail are documented in this file.
 
+## v0.8.0 — 2026-04-07
+
+### Added
+
+- Library relocation: move your database and files directories to new locations via Preferences > Storage
+- Three migration modes: Export (copy library), Create New (fresh library), and Merge (combine libraries)
+- Split paths: database and files directories can be set independently (e.g., database on local SSD, PDFs in synced folder)
+- Library merge with duplicate detection by arXiv ID and three conflict resolution strategies (keep existing, keep incoming, keep both)
+- Merge conflict dialog for choosing duplicate resolution strategy
+- Progress bar and cancellation support during library migration
+- "Show in Finder" for current and previous library locations in the Storage tab
+- Previous library path display after migration for easy cleanup
+- `LibraryMigrationWorker` for non-blocking background migrations
+- `open_directory()` cross-platform utility (macOS Finder / Linux file managers)
+- Storage tab in Preferences dialog showing library locations and migration controls
+
 ## v0.7.1 — 2026-04-01
 
 ### Changed
