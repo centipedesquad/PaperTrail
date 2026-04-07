@@ -17,7 +17,7 @@ from PySide6.QtCore import Qt
 from ui.theme import get_theme_manager, FONT_BODY_STACK
 from utils.library_migration import (
     read_config, export_library, create_new_library,
-    null_file_paths_in_db
+    null_file_paths_in_db, analyze_merge, merge_library
 )
 from utils.async_utils import LibraryMigrationWorker
 from database.connection import get_database, close_database
@@ -147,11 +147,30 @@ class ChangeLibraryDialog(QDialog):
         new_desc.setWordWrap(True)
         new_desc.setStyleSheet(
             f"color: {theme.get_color('text_secondary')}; font-size: 12px; "
-            f"margin-left: 24px;"
+            f"margin-left: 24px; margin-bottom: 8px;"
         )
         mode_layout.addWidget(new_desc)
 
+        self._merge_radio = QRadioButton("Merge into existing library")
+        self._mode_group.addButton(self._merge_radio, 2)
+        mode_layout.addWidget(self._merge_radio)
+
+        merge_desc = QLabel(
+            "Merges papers from your current library into the database "
+            "at the destination. Destination settings are preserved."
+        )
+        merge_desc.setWordWrap(True)
+        merge_desc.setStyleSheet(
+            f"color: {theme.get_color('text_secondary')}; font-size: 12px; "
+            f"margin-left: 24px;"
+        )
+        mode_layout.addWidget(merge_desc)
+
         layout.addWidget(mode_group)
+
+        # Enable/disable merge based on destination DB existence
+        self._db_path_edit.textChanged.connect(self._update_merge_availability)
+        self._update_merge_availability()
 
         # Progress bar (hidden initially)
         self._progress_bar = QProgressBar()
@@ -244,9 +263,17 @@ class ChangeLibraryDialog(QDialog):
                 )
                 return None
 
-        # For Export mode, check destination doesn't already have a database
-        if self._export_radio.isChecked() and db_changed:
-            dest_db = os.path.join(new_db, "papertrail.db")
+        # Mode-specific validation
+        dest_db = os.path.join(new_db, "papertrail.db")
+        if self._merge_radio.isChecked():
+            if not os.path.exists(dest_db):
+                QMessageBox.warning(
+                    self, "No Database Found",
+                    f"No database found at:\n{dest_db}\n\n"
+                    "Merge requires an existing database at the destination."
+                )
+                return None
+        elif self._export_radio.isChecked() and db_changed:
             if os.path.exists(dest_db):
                 reply = QMessageBox.question(
                     self, "Database Exists",
@@ -269,6 +296,7 @@ class ChangeLibraryDialog(QDialog):
         new_db = self._db_path_edit.text().strip()
         new_files = self._files_path_edit.text().strip()
         is_export = self._export_radio.isChecked()
+        is_merge = self._merge_radio.isChecked()
 
         # Size estimate for export mode
         if is_export and files_changed:
@@ -291,15 +319,81 @@ class ChangeLibraryDialog(QDialog):
                 if reply != QMessageBox.Yes:
                     return
 
+        # Merge: analyze duplicates and get strategy
+        merge_strategy = None
+        if is_merge:
+            src_db_path = os.path.join(self._current_db_dir, "papertrail.db")
+            dst_db_path = os.path.join(new_db, "papertrail.db")
+            analysis = analyze_merge(src_db_path, dst_db_path)
+
+            if analysis["duplicate_count"] > 0:
+                from ui.dialogs.merge_conflict_dialog import MergeConflictDialog
+                dialog = MergeConflictDialog(analysis["duplicate_count"], self)
+                merge_strategy = dialog.get_strategy()
+                if merge_strategy is None:
+                    return
+            else:
+                merge_strategy = "keep_existing"
+
         # Quiesce workers via main window
         main_window = self.parent()
         if main_window and hasattr(main_window, '_stop_all_workers'):
             main_window._stop_all_workers()
 
-        if is_export:
+        if is_merge:
+            self._run_merge(new_db, new_files, merge_strategy)
+        elif is_export:
             self._run_export(new_db, new_files, db_changed, files_changed)
         else:
             self._run_create_new(new_db, new_files, db_changed, files_changed)
+
+    def _run_merge(self, new_db_dir: str, new_files_dir: str, strategy: str):
+        # WAL checkpoint on source DB
+        try:
+            db = get_database()
+            db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            close_database()
+            logger.info("WAL checkpoint completed for merge")
+        except Exception as e:
+            logger.warning(f"WAL checkpoint failed, proceeding: {e}")
+
+        self._apply_btn.setEnabled(False)
+        self._progress_bar.setVisible(True)
+        self._status_label.setVisible(True)
+
+        self._worker = LibraryMigrationWorker(
+            merge_library,
+            src_db_dir=self._current_db_dir,
+            dst_db_dir=new_db_dir,
+            src_files_dir=self._current_files_dir,
+            dst_files_dir=new_files_dir,
+            duplicate_strategy=strategy,
+        )
+        self._worker.progress.connect(self._on_progress)
+        self._worker.finished.connect(
+            lambda ok: self._on_merge_finished(ok, new_db_dir, new_files_dir)
+        )
+        self._worker.error.connect(self._on_migration_error)
+        self._worker.start()
+
+    def _on_merge_finished(self, success: bool, new_db_dir: str, new_files_dir: str):
+        if success:
+            self._show_completion_dialog(
+                new_db_dir, new_files_dir,
+                db_changed=True, files_changed=True
+            )
+        else:
+            self._on_migration_error("Merge did not complete successfully.")
+
+    def _update_merge_availability(self):
+        """Enable merge radio only when destination has a database."""
+        db_path = self._db_path_edit.text().strip()
+        has_db = bool(db_path) and os.path.exists(
+            os.path.join(db_path, "papertrail.db")
+        )
+        self._merge_radio.setEnabled(has_db)
+        if not has_db and self._merge_radio.isChecked():
+            self._export_radio.setChecked(True)
 
     def _run_export(self, new_db_dir: str, new_files_dir: str,
                     db_changed: bool, files_changed: bool):

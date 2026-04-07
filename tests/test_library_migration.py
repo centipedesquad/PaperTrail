@@ -5,13 +5,109 @@ import os
 import tempfile
 import pytest
 
+import sqlite3
+
 from utils.library_migration import (
     read_config, write_config, read_previous_paths, dismiss_previous_paths,
     update_paths_in_db, export_library, create_new_library,
     null_file_paths_in_db, count_files, count_directory_size,
-    copy_directory_with_progress,
+    copy_directory_with_progress, analyze_merge, merge_library,
 )
 from services.config_service import ConfigService
+
+
+def _create_test_db(db_path, papers=None):
+    """Create a minimal test database with optional paper data.
+
+    Args:
+        db_path: Path for the SQLite database file
+        papers: List of dicts with keys: arxiv_id, title, authors (list of str),
+                categories (list of str), local_pdf_path, note_text
+    """
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE IF NOT EXISTS settings "
+                 "(key TEXT PRIMARY KEY, value TEXT, updated_at TEXT)")
+    conn.execute("CREATE TABLE IF NOT EXISTS papers "
+                 "(id INTEGER PRIMARY KEY AUTOINCREMENT, arxiv_id TEXT NOT NULL UNIQUE, "
+                 "title TEXT NOT NULL, abstract TEXT NOT NULL, publication_date TEXT NOT NULL, "
+                 "pdf_url TEXT NOT NULL, local_pdf_path TEXT, local_source_path TEXT, "
+                 "origin TEXT NOT NULL DEFAULT 'fetch', version TEXT, comment TEXT, "
+                 "journal_ref TEXT, doi TEXT, date_added TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+                 "last_accessed TIMESTAMP, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, "
+                 "updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+    conn.execute("CREATE TABLE IF NOT EXISTS authors "
+                 "(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, "
+                 "normalized_name TEXT NOT NULL UNIQUE)")
+    conn.execute("CREATE TABLE IF NOT EXISTS categories "
+                 "(id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL UNIQUE, "
+                 "name TEXT NOT NULL, parent_code TEXT)")
+    conn.execute("CREATE TABLE IF NOT EXISTS paper_authors "
+                 "(id INTEGER PRIMARY KEY AUTOINCREMENT, paper_id INTEGER NOT NULL, "
+                 "author_id INTEGER NOT NULL, author_order INTEGER NOT NULL, "
+                 "FOREIGN KEY(paper_id) REFERENCES papers(id) ON DELETE CASCADE, "
+                 "UNIQUE(paper_id, author_id))")
+    conn.execute("CREATE TABLE IF NOT EXISTS paper_categories "
+                 "(id INTEGER PRIMARY KEY AUTOINCREMENT, paper_id INTEGER NOT NULL, "
+                 "category_id INTEGER NOT NULL, is_primary BOOLEAN DEFAULT 0, "
+                 "FOREIGN KEY(paper_id) REFERENCES papers(id) ON DELETE CASCADE, "
+                 "UNIQUE(paper_id, category_id))")
+    conn.execute("CREATE TABLE IF NOT EXISTS paper_notes "
+                 "(id INTEGER PRIMARY KEY AUTOINCREMENT, paper_id INTEGER NOT NULL UNIQUE, "
+                 "note_text TEXT, FOREIGN KEY(paper_id) REFERENCES papers(id) ON DELETE CASCADE)")
+    conn.execute("CREATE TABLE IF NOT EXISTS paper_ratings "
+                 "(id INTEGER PRIMARY KEY AUTOINCREMENT, paper_id INTEGER NOT NULL UNIQUE, "
+                 "importance TEXT, comprehension TEXT, technicality TEXT, "
+                 "FOREIGN KEY(paper_id) REFERENCES papers(id) ON DELETE CASCADE)")
+    conn.execute("PRAGMA foreign_keys = ON")
+
+    for p in (papers or []):
+        cursor = conn.execute(
+            "INSERT INTO papers (arxiv_id, title, abstract, publication_date, pdf_url, "
+            "local_pdf_path) VALUES (?, ?, ?, ?, ?, ?)",
+            (p['arxiv_id'], p.get('title', 'Test'), 'Abstract',
+             '2024-01-01', 'http://x', p.get('local_pdf_path'))
+        )
+        paper_id = cursor.lastrowid
+        for i, author_name in enumerate(p.get('authors', [])):
+            normalized = author_name.lower().strip()
+            existing = conn.execute(
+                "SELECT id FROM authors WHERE normalized_name = ?", (normalized,)
+            ).fetchone()
+            if existing:
+                author_id = existing[0]
+            else:
+                c = conn.execute(
+                    "INSERT INTO authors (name, normalized_name) VALUES (?, ?)",
+                    (author_name, normalized)
+                )
+                author_id = c.lastrowid
+            conn.execute(
+                "INSERT INTO paper_authors (paper_id, author_id, author_order) "
+                "VALUES (?, ?, ?)", (paper_id, author_id, i)
+            )
+        for code in p.get('categories', []):
+            existing = conn.execute(
+                "SELECT id FROM categories WHERE code = ?", (code,)
+            ).fetchone()
+            if existing:
+                cat_id = existing[0]
+            else:
+                c = conn.execute(
+                    "INSERT INTO categories (code, name) VALUES (?, ?)",
+                    (code, code)
+                )
+                cat_id = c.lastrowid
+            conn.execute(
+                "INSERT INTO paper_categories (paper_id, category_id, is_primary) "
+                "VALUES (?, ?, ?)", (paper_id, cat_id, 0)
+            )
+        if p.get('note_text'):
+            conn.execute(
+                "INSERT INTO paper_notes (paper_id, note_text) VALUES (?, ?)",
+                (paper_id, p['note_text'])
+            )
+    conn.commit()
+    conn.close()
 
 
 @pytest.fixture
@@ -519,3 +615,272 @@ class TestCountDirectorySize:
 
     def test_nonexistent_dir(self):
         assert count_directory_size("/nonexistent/path") == 0
+
+
+# ── analyze_merge ──────────────────────────────────────────────
+
+class TestAnalyzeMerge:
+    def test_no_duplicates(self, config_file):
+        with tempfile.TemporaryDirectory() as d:
+            src_db = os.path.join(d, "src.db")
+            dst_db = os.path.join(d, "dst.db")
+            _create_test_db(src_db, [{"arxiv_id": "2301.00001"}])
+            _create_test_db(dst_db, [{"arxiv_id": "2301.00002"}])
+
+            result = analyze_merge(src_db, dst_db)
+            assert result["total_incoming"] == 1
+            assert result["non_duplicate_count"] == 1
+            assert result["duplicate_count"] == 0
+
+    def test_with_duplicates(self, config_file):
+        with tempfile.TemporaryDirectory() as d:
+            src_db = os.path.join(d, "src.db")
+            dst_db = os.path.join(d, "dst.db")
+            _create_test_db(src_db, [
+                {"arxiv_id": "2301.00001"},
+                {"arxiv_id": "2301.00002"},
+            ])
+            _create_test_db(dst_db, [
+                {"arxiv_id": "2301.00001"},
+                {"arxiv_id": "2301.00003"},
+            ])
+
+            result = analyze_merge(src_db, dst_db)
+            assert result["total_incoming"] == 2
+            assert result["non_duplicate_count"] == 1
+            assert result["duplicate_count"] == 1
+            assert "2301.00001" in result["duplicate_arxiv_ids"]
+
+    def test_empty_source(self, config_file):
+        with tempfile.TemporaryDirectory() as d:
+            src_db = os.path.join(d, "src.db")
+            dst_db = os.path.join(d, "dst.db")
+            _create_test_db(src_db, [])
+            _create_test_db(dst_db, [{"arxiv_id": "2301.00001"}])
+
+            result = analyze_merge(src_db, dst_db)
+            assert result["total_incoming"] == 0
+            assert result["duplicate_count"] == 0
+
+
+# ── merge_library ──────────────────────────────────────────────
+
+class TestMergeLibrary:
+    def _setup_dirs(self, tmpdir):
+        """Create src and dst directory structures with DBs."""
+        src_dir = os.path.join(tmpdir, "src")
+        dst_dir = os.path.join(tmpdir, "dst")
+        os.makedirs(os.path.join(src_dir, "pdfs"))
+        os.makedirs(os.path.join(dst_dir, "pdfs"))
+        return src_dir, dst_dir
+
+    def test_merge_non_duplicates(self, config_file):
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+            _create_test_db(os.path.join(src_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "title": "Paper A",
+                 "authors": ["Alice", "Bob"], "categories": ["cs.AI"]},
+            ])
+            _create_test_db(os.path.join(dst_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00002", "title": "Paper B"},
+            ])
+
+            merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_existing")
+
+            conn = sqlite3.connect(os.path.join(dst_dir, "papertrail.db"))
+            papers = conn.execute("SELECT arxiv_id FROM papers ORDER BY arxiv_id").fetchall()
+            conn.close()
+            ids = [r[0] for r in papers]
+            assert "2301.00001" in ids
+            assert "2301.00002" in ids
+
+    def test_merge_keep_existing(self, config_file):
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+            _create_test_db(os.path.join(src_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "title": "Incoming Version"},
+            ])
+            _create_test_db(os.path.join(dst_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "title": "Existing Version"},
+            ])
+
+            merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_existing")
+
+            conn = sqlite3.connect(os.path.join(dst_dir, "papertrail.db"))
+            row = conn.execute("SELECT title FROM papers WHERE arxiv_id = '2301.00001'").fetchone()
+            count = conn.execute("SELECT COUNT(*) FROM papers").fetchone()[0]
+            conn.close()
+            assert row[0] == "Existing Version"
+            assert count == 1
+
+    def test_merge_keep_incoming(self, config_file):
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+            _create_test_db(os.path.join(src_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "title": "Incoming Version"},
+            ])
+            _create_test_db(os.path.join(dst_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "title": "Existing Version"},
+            ])
+
+            merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_incoming")
+
+            conn = sqlite3.connect(os.path.join(dst_dir, "papertrail.db"))
+            row = conn.execute("SELECT title FROM papers WHERE arxiv_id = '2301.00001'").fetchone()
+            conn.close()
+            assert row[0] == "Incoming Version"
+
+    def test_merge_keep_both(self, config_file):
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+            _create_test_db(os.path.join(src_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "title": "Incoming"},
+            ])
+            _create_test_db(os.path.join(dst_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "title": "Existing"},
+            ])
+
+            merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_both")
+
+            conn = sqlite3.connect(os.path.join(dst_dir, "papertrail.db"))
+            papers = conn.execute("SELECT arxiv_id, title FROM papers ORDER BY arxiv_id").fetchall()
+            conn.close()
+            assert len(papers) == 2
+            ids = [r[0] for r in papers]
+            assert "2301.00001" in ids
+            assert "2301.00001_copy" in ids
+
+    def test_merge_copies_files(self, config_file):
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+            pdf_path = os.path.join(src_dir, "pdfs", "paper1.pdf")
+            with open(pdf_path, 'w') as f:
+                f.write("fake pdf")
+
+            _create_test_db(os.path.join(src_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "local_pdf_path": pdf_path},
+            ])
+            _create_test_db(os.path.join(dst_dir, "papertrail.db"), [])
+
+            merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_existing")
+
+            assert os.path.exists(os.path.join(dst_dir, "pdfs", "paper1.pdf"))
+
+    def test_merge_skips_files_for_keep_existing(self, config_file):
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+            pdf_path = os.path.join(src_dir, "pdfs", "dup.pdf")
+            with open(pdf_path, 'w') as f:
+                f.write("incoming pdf")
+
+            _create_test_db(os.path.join(src_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "local_pdf_path": pdf_path},
+            ])
+            _create_test_db(os.path.join(dst_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001"},
+            ])
+
+            merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_existing")
+
+            # File should NOT be copied for skipped duplicate
+            assert not os.path.exists(os.path.join(dst_dir, "pdfs", "dup.pdf"))
+
+    def test_merge_preserves_settings(self, config_file):
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+            _create_test_db(os.path.join(src_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001"},
+            ])
+            dst_db = os.path.join(dst_dir, "papertrail.db")
+            _create_test_db(dst_db, [])
+            conn = sqlite3.connect(dst_db)
+            conn.execute("INSERT INTO settings (key, value) VALUES ('theme', 'dark')")
+            conn.commit()
+            conn.close()
+
+            merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_existing")
+
+            conn = sqlite3.connect(dst_db)
+            row = conn.execute("SELECT value FROM settings WHERE key = 'theme'").fetchone()
+            conn.close()
+            assert row[0] == "dark"
+
+    def test_merge_notes_and_ratings(self, config_file):
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+            _create_test_db(os.path.join(src_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "note_text": "Important paper"},
+            ])
+            _create_test_db(os.path.join(dst_dir, "papertrail.db"), [])
+
+            merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_existing")
+
+            conn = sqlite3.connect(os.path.join(dst_dir, "papertrail.db"))
+            note = conn.execute(
+                "SELECT n.note_text FROM paper_notes n "
+                "JOIN papers p ON n.paper_id = p.id "
+                "WHERE p.arxiv_id = '2301.00001'"
+            ).fetchone()
+            conn.close()
+            assert note[0] == "Important paper"
+
+    def test_merge_authors_shared(self, config_file):
+        """Same author in both DBs should not create duplicate author rows."""
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+            _create_test_db(os.path.join(src_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "authors": ["Alice"]},
+            ])
+            _create_test_db(os.path.join(dst_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00002", "authors": ["Alice"]},
+            ])
+
+            merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_existing")
+
+            conn = sqlite3.connect(os.path.join(dst_dir, "papertrail.db"))
+            author_count = conn.execute(
+                "SELECT COUNT(*) FROM authors WHERE normalized_name = 'alice'"
+            ).fetchone()[0]
+            conn.close()
+            assert author_count == 1
+
+    def test_merge_cancellation(self, config_file):
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+            _create_test_db(os.path.join(src_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001"},
+                {"arxiv_id": "2301.00002"},
+            ])
+            _create_test_db(os.path.join(dst_dir, "papertrail.db"), [])
+
+            result = merge_library(
+                src_dir, dst_dir, src_dir, dst_dir,
+                "keep_existing", cancelled=lambda: True
+            )
+            assert result is False
+
+            # Destination should be unchanged (rollback)
+            conn = sqlite3.connect(os.path.join(dst_dir, "papertrail.db"))
+            count = conn.execute("SELECT COUNT(*) FROM papers").fetchone()[0]
+            conn.close()
+            assert count == 0
+
+    def test_merge_copy_suffix_collision(self, config_file):
+        """If _copy already exists, use _copy2."""
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+            _create_test_db(os.path.join(src_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001"},
+            ])
+            _create_test_db(os.path.join(dst_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001"},
+                {"arxiv_id": "2301.00001_copy"},
+            ])
+
+            merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_both")
+
+            conn = sqlite3.connect(os.path.join(dst_dir, "papertrail.db"))
+            papers = conn.execute("SELECT arxiv_id FROM papers ORDER BY arxiv_id").fetchall()
+            conn.close()
+            ids = [r[0] for r in papers]
+            assert "2301.00001_copy2" in ids

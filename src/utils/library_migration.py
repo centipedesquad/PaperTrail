@@ -399,3 +399,339 @@ def null_file_paths_in_db(db_path: str):
         logger.info("Nulled all local file paths in database")
     finally:
         conn.close()
+
+
+def analyze_merge(src_db_path: str, dst_db_path: str) -> dict:
+    """
+    Compare two databases and return merge analysis.
+
+    Returns:
+        dict with total_incoming, non_duplicate_count,
+        duplicate_count, duplicate_arxiv_ids
+    """
+    src_conn = sqlite3.connect(src_db_path)
+    dst_conn = sqlite3.connect(dst_db_path)
+    try:
+        src_ids = set(
+            row[0] for row in
+            src_conn.execute("SELECT arxiv_id FROM papers").fetchall()
+        )
+        dst_ids = set(
+            row[0] for row in
+            dst_conn.execute("SELECT arxiv_id FROM papers").fetchall()
+        )
+        duplicates = sorted(src_ids & dst_ids)
+        return {
+            "total_incoming": len(src_ids),
+            "non_duplicate_count": len(src_ids - dst_ids),
+            "duplicate_count": len(duplicates),
+            "duplicate_arxiv_ids": duplicates,
+        }
+    finally:
+        src_conn.close()
+        dst_conn.close()
+
+
+def _find_unique_copy_id(conn: sqlite3.Connection, arxiv_id: str) -> str:
+    """Find a unique arxiv_id by appending _copy, _copy2, etc."""
+    candidate = f"{arxiv_id}_copy"
+    for i in range(2, 100):
+        row = conn.execute(
+            "SELECT 1 FROM papers WHERE arxiv_id = ?", (candidate,)
+        ).fetchone()
+        if row is None:
+            return candidate
+        candidate = f"{arxiv_id}_copy{i}"
+    raise ValueError(f"Could not find unique copy ID for {arxiv_id}")
+
+
+def _insert_paper_with_related(
+    dst_conn: sqlite3.Connection,
+    src_paper: sqlite3.Row,
+    arxiv_id: str,
+    src_files_dir: str,
+    dst_files_dir: str,
+) -> Tuple[int, list]:
+    """
+    Insert a paper and all related data into the destination database.
+
+    Returns:
+        (new_paper_id, [(src_file_path, dst_file_path), ...])
+    """
+    src_paper_id = src_paper['id']
+    files_to_copy = []
+
+    new_pdf_path = None
+    new_source_path = None
+
+    if src_paper['local_pdf_path']:
+        old_path = src_paper['local_pdf_path']
+        try:
+            rel = os.path.relpath(old_path, src_files_dir)
+            if not rel.startswith('..'):
+                new_pdf_path = os.path.join(dst_files_dir, rel)
+                files_to_copy.append((old_path, new_pdf_path))
+        except ValueError:
+            pass
+
+    if src_paper['local_source_path']:
+        old_path = src_paper['local_source_path']
+        try:
+            rel = os.path.relpath(old_path, src_files_dir)
+            if not rel.startswith('..'):
+                new_source_path = os.path.join(dst_files_dir, rel)
+                files_to_copy.append((old_path, new_source_path))
+        except ValueError:
+            pass
+
+    cursor = dst_conn.execute(
+        "INSERT INTO main.papers ("
+        "  arxiv_id, title, abstract, publication_date, pdf_url,"
+        "  local_pdf_path, local_source_path, origin, version,"
+        "  comment, journal_ref, doi, date_added, last_accessed,"
+        "  created_at, updated_at"
+        ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            arxiv_id,
+            src_paper['title'], src_paper['abstract'],
+            src_paper['publication_date'], src_paper['pdf_url'],
+            new_pdf_path, new_source_path,
+            src_paper['origin'], src_paper['version'],
+            src_paper['comment'], src_paper['journal_ref'],
+            src_paper['doi'], src_paper['date_added'],
+            src_paper['last_accessed'], src_paper['created_at'],
+            src_paper['updated_at'],
+        )
+    )
+    new_paper_id = cursor.lastrowid
+
+    # Authors
+    src_authors = dst_conn.execute(
+        "SELECT a.name, a.normalized_name, pa.author_order "
+        "FROM src.paper_authors pa "
+        "JOIN src.authors a ON pa.author_id = a.id "
+        "WHERE pa.paper_id = ? ORDER BY pa.author_order",
+        (src_paper_id,)
+    ).fetchall()
+
+    for author_row in src_authors:
+        existing = dst_conn.execute(
+            "SELECT id FROM main.authors WHERE normalized_name = ?",
+            (author_row['normalized_name'],)
+        ).fetchone()
+        if existing:
+            author_id = existing['id']
+        else:
+            c = dst_conn.execute(
+                "INSERT INTO main.authors (name, normalized_name) VALUES (?, ?)",
+                (author_row['name'], author_row['normalized_name'])
+            )
+            author_id = c.lastrowid
+
+        dst_conn.execute(
+            "INSERT INTO main.paper_authors (paper_id, author_id, author_order) "
+            "VALUES (?, ?, ?)",
+            (new_paper_id, author_id, author_row['author_order'])
+        )
+
+    # Categories
+    src_cats = dst_conn.execute(
+        "SELECT c.code, c.name, c.parent_code, pc.is_primary "
+        "FROM src.paper_categories pc "
+        "JOIN src.categories c ON pc.category_id = c.id "
+        "WHERE pc.paper_id = ?",
+        (src_paper_id,)
+    ).fetchall()
+
+    for cat_row in src_cats:
+        existing = dst_conn.execute(
+            "SELECT id FROM main.categories WHERE code = ?",
+            (cat_row['code'],)
+        ).fetchone()
+        if existing:
+            cat_id = existing['id']
+        else:
+            c = dst_conn.execute(
+                "INSERT INTO main.categories (code, name, parent_code) "
+                "VALUES (?, ?, ?)",
+                (cat_row['code'], cat_row['name'], cat_row['parent_code'])
+            )
+            cat_id = c.lastrowid
+
+        dst_conn.execute(
+            "INSERT INTO main.paper_categories (paper_id, category_id, is_primary) "
+            "VALUES (?, ?, ?)",
+            (new_paper_id, cat_id, cat_row['is_primary'])
+        )
+
+    # Notes
+    try:
+        src_note = dst_conn.execute(
+            "SELECT note_text FROM src.paper_notes WHERE paper_id = ?",
+            (src_paper_id,)
+        ).fetchone()
+        if src_note and src_note['note_text']:
+            dst_conn.execute(
+                "INSERT INTO main.paper_notes (paper_id, note_text) VALUES (?, ?)",
+                (new_paper_id, src_note['note_text'])
+            )
+    except sqlite3.OperationalError:
+        pass
+
+    # Ratings
+    try:
+        src_rating = dst_conn.execute(
+            "SELECT importance, comprehension, technicality "
+            "FROM src.paper_ratings WHERE paper_id = ?",
+            (src_paper_id,)
+        ).fetchone()
+        if src_rating:
+            dst_conn.execute(
+                "INSERT INTO main.paper_ratings "
+                "(paper_id, importance, comprehension, technicality) "
+                "VALUES (?, ?, ?, ?)",
+                (new_paper_id, src_rating['importance'],
+                 src_rating['comprehension'], src_rating['technicality'])
+            )
+    except sqlite3.OperationalError:
+        pass
+
+    return new_paper_id, files_to_copy
+
+
+def merge_library(
+    src_db_dir: str,
+    dst_db_dir: str,
+    src_files_dir: str,
+    dst_files_dir: str,
+    duplicate_strategy: str,
+    progress_callback: Optional[Callable[[int, int, str], None]] = None,
+    cancelled: Optional[Callable[[], bool]] = None,
+) -> bool:
+    """
+    Merge incoming (source) library into destination library.
+
+    Args:
+        src_db_dir: Current (source) database directory
+        dst_db_dir: Destination database directory
+        src_files_dir: Current files directory
+        dst_files_dir: Destination files directory
+        duplicate_strategy: "keep_incoming", "keep_existing", or "keep_both"
+        progress_callback: Optional callback(current, total, status)
+        cancelled: Optional callable returning True if cancelled
+
+    Returns:
+        True if successful
+    """
+    src_db_path = os.path.join(src_db_dir, "papertrail.db")
+    dst_db_path = os.path.join(dst_db_dir, "papertrail.db")
+
+    dst_conn = sqlite3.connect(dst_db_path)
+    dst_conn.row_factory = sqlite3.Row
+    dst_conn.execute("PRAGMA foreign_keys = ON")
+
+    try:
+        dst_conn.execute("ATTACH DATABASE ? AS src", (src_db_path,))
+
+        src_papers = dst_conn.execute(
+            "SELECT * FROM src.papers ORDER BY id"
+        ).fetchall()
+
+        dst_arxiv_ids = set(
+            row[0] for row in
+            dst_conn.execute("SELECT arxiv_id FROM main.papers").fetchall()
+        )
+
+        total_papers = len(src_papers)
+        if total_papers == 0:
+            logger.info("No papers to merge")
+            return True
+
+        files_to_copy = []
+        processed = 0
+
+        dst_conn.execute("BEGIN")
+        try:
+            for src_paper in src_papers:
+                if cancelled and cancelled():
+                    dst_conn.execute("ROLLBACK")
+                    return False
+
+                arxiv_id = src_paper['arxiv_id']
+                is_duplicate = arxiv_id in dst_arxiv_ids
+
+                if not is_duplicate:
+                    _, files = _insert_paper_with_related(
+                        dst_conn, src_paper, arxiv_id,
+                        src_files_dir, dst_files_dir
+                    )
+                    files_to_copy.extend(files)
+
+                elif duplicate_strategy == "keep_existing":
+                    pass
+
+                elif duplicate_strategy == "keep_incoming":
+                    dst_conn.execute(
+                        "DELETE FROM main.papers WHERE arxiv_id = ?",
+                        (arxiv_id,)
+                    )
+                    _, files = _insert_paper_with_related(
+                        dst_conn, src_paper, arxiv_id,
+                        src_files_dir, dst_files_dir
+                    )
+                    files_to_copy.extend(files)
+
+                elif duplicate_strategy == "keep_both":
+                    new_arxiv_id = _find_unique_copy_id(dst_conn, arxiv_id)
+                    _, files = _insert_paper_with_related(
+                        dst_conn, src_paper, new_arxiv_id,
+                        src_files_dir, dst_files_dir
+                    )
+                    files_to_copy.extend(files)
+
+                processed += 1
+                if progress_callback:
+                    pct = int((processed / total_papers) * 50)
+                    progress_callback(
+                        pct, 100,
+                        f"Merging paper {processed}/{total_papers}"
+                    )
+
+            dst_conn.execute("COMMIT")
+        except Exception:
+            dst_conn.execute("ROLLBACK")
+            raise
+
+        # Phase 3: Copy files
+        total_files = len(files_to_copy)
+        for i, (src_path, dst_path) in enumerate(files_to_copy):
+            if cancelled and cancelled():
+                return False
+
+            if src_path and os.path.exists(src_path):
+                os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+                if os.path.isdir(src_path):
+                    shutil.copytree(src_path, dst_path, dirs_exist_ok=True)
+                else:
+                    shutil.copy2(src_path, dst_path)
+
+            if progress_callback and total_files > 0:
+                pct = 50 + int(((i + 1) / total_files) * 50)
+                progress_callback(pct, 100, os.path.basename(str(dst_path)))
+
+        # Phase 4: Update config
+        write_config(dst_db_dir, dst_files_dir, src_db_dir, src_files_dir)
+
+        logger.info(f"Library merge completed: {processed} papers processed, "
+                     f"{total_files} files copied")
+        return True
+
+    except Exception as e:
+        logger.error(f"Library merge failed: {e}")
+        raise
+    finally:
+        try:
+            dst_conn.execute("DETACH DATABASE src")
+        except Exception:
+            pass
+        dst_conn.close()
