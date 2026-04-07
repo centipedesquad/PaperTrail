@@ -22,6 +22,7 @@ A desktop application for efficiently managing and organizing arXiv papers for r
 - **Advanced Filtering**: Filter by categories, date ranges, rating status, and PDF availability
 - **Theme Support**: Light and dark mode with Ctrl+T toggle
 - **Preferences Dialog**: Configurable theme, font size, PDF settings, and fetch defaults
+- **Library Management**: Relocate, export, or merge libraries with split database/files paths
 - **Hierarchical Categories**: Smart grouping of arXiv categories by field (Physics, CS, Math, etc.)
 - **Cross-Platform**: Works on macOS and Linux
 
@@ -98,6 +99,8 @@ On first run, you'll be prompted to choose a data directory location. This is wh
 
 You can choose the default location or select a custom directory (e.g., in your cloud sync folder).
 
+You can change this location later from Preferences > Storage.
+
 ### Fetching Papers
 
 1. Click "Fetch Papers" in the toolbar (or press `Ctrl+Shift+F`)
@@ -155,6 +158,18 @@ Select a paper and use the notes editor in the context panel. Notes auto-save af
 - **Library views**: All Papers, Recent, Unread, Rated, Imported
 - **Sort by**: newest first, oldest first, title A-Z, or title Z-A
 
+### Managing Your Library
+
+You can relocate or merge your library after initial setup via **Preferences > Storage**.
+
+Three migration modes are available:
+
+- **Export**: Copies your database and files to new locations. The originals are preserved so you can verify before deleting them.
+- **Create New**: Starts a fresh, empty library at the chosen locations.
+- **Merge**: Merges your current papers into an existing library at the destination. When duplicates are found (by arXiv ID), you can choose to keep the existing version, keep the incoming version, or keep both.
+
+The database and files directories can point to different locations (e.g., database on a fast local drive, PDFs in a synced folder). After a migration, previous library paths are shown in the Storage tab for easy cleanup.
+
 ## Configuration
 
 ### Naming Pattern
@@ -189,6 +204,7 @@ Access via **File > Preferences** (or Cmd+, on macOS):
 - **General**: Theme (light/dark), font size (8-20pt)
 - **PDF**: Reader path, default download behavior (ask/download/stream), naming pattern
 - **Fetching**: Max results per category, default fetch mode, number of recent days
+- **Storage**: Current library locations, change library location, previous library cleanup
 
 ### Keyboard Shortcuts
 
@@ -246,6 +262,8 @@ PaperTrail/
 │   │       ├── fetch_papers_dialog.py
 │   │       ├── pdf_action_dialog.py
 │   │       ├── arxiv_search_results_dialog.py
+│   │       ├── change_library_dialog.py
+│   │       ├── merge_conflict_dialog.py
 │   │       └── preferences_dialog.py
 │   ├── assets/                    # App resources
 │   │   ├── AppIcon.icns           # Application icon
@@ -254,7 +272,8 @@ PaperTrail/
 │       ├── platform_utils.py
 │       ├── async_utils.py
 │       ├── download_utils.py
-│       └── filename_utils.py
+│       ├── filename_utils.py
+│       └── library_migration.py
 ├── data/                          # Runtime data (user-chosen location)
 ├── tests/                         # Test suite
 └── pyproject.toml
