@@ -261,6 +261,61 @@ class ArxivSearchWorker(QThread):
         self._is_cancelled = True
 
 
+class LibraryMigrationWorker(QThread):
+    """Background worker for migrating library files to a new location."""
+
+    progress = Signal(int, str)  # (percentage, status_message)
+    finished = Signal(bool)  # success
+    error = Signal(str)
+
+    def __init__(self, export_func: Callable, **kwargs):
+        """
+        Args:
+            export_func: The migration function to call
+            **kwargs: Arguments to pass to export_func
+        """
+        super().__init__()
+        self.export_func = export_func
+        self.kwargs = kwargs
+        self._is_cancelled = False
+
+    def run(self):
+        try:
+            self.progress.emit(0, "Starting migration...")
+
+            def progress_callback(current: int, total: int, filename: str):
+                if self._is_cancelled:
+                    raise InterruptedError("Migration cancelled")
+                if total > 0:
+                    percentage = int((current / total) * 100)
+                    self.progress.emit(percentage, f"Copying {current}/{total}: {filename}")
+                else:
+                    self.progress.emit(0, f"Copying: {filename}")
+
+            result = self.export_func(
+                progress_callback=progress_callback,
+                cancelled=lambda: self._is_cancelled,
+                **self.kwargs
+            )
+
+            if self._is_cancelled:
+                self.progress.emit(0, "Cancelled")
+                return
+
+            self.progress.emit(100, "Migration complete")
+            self.finished.emit(result)
+
+        except InterruptedError:
+            logger.info("Library migration cancelled by user")
+            self.error.emit("Migration cancelled")
+        except Exception as e:
+            logger.error(f"Library migration error: {e}")
+            self.error.emit(str(e))
+
+    def cancel(self):
+        self._is_cancelled = True
+
+
 class SourceDownloadWorker(QThread):
     """Background worker for downloading and extracting source files."""
 

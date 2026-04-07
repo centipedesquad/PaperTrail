@@ -693,16 +693,8 @@ class MainWindow(QMainWindow):
         self._pop_wait_cursor()
         self._update_statusbar("Source files ready", 3000)
         # Open the downloaded path directly (works for both permanent and stream mode)
-        try:
-            if os.path.exists(source_path):
-                if sys.platform == 'darwin':
-                    subprocess.Popen(['open', source_path])
-                else:
-                    subprocess.Popen(['xdg-open', source_path])
-            else:
-                logger.error(f"Source path not found: {source_path}")
-        except Exception as e:
-            logger.error(f"Failed to open source directory: {e}")
+        from utils.platform_utils import open_directory
+        open_directory(source_path)
         # Refresh context panel only if this paper is still selected
         if (self.context_panel.current_paper and
                 self.context_panel.current_paper.id == paper_id):

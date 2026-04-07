@@ -4,13 +4,11 @@ Handles downloading, extracting, opening, and deleting arXiv source files.
 """
 
 import os
-import sys
 import gzip
 import shutil
 import tarfile
 import logging
 import tempfile
-import subprocess
 from pathlib import Path
 from typing import Optional, Callable
 
@@ -32,12 +30,12 @@ class SourceService:
         self.config_service = config_service
         self.paper_service = paper_service
 
-        self.data_dir = config_service.get_database_location()
-        if not self.data_dir:
-            raise ValueError("Database location not configured")
+        self.files_dir = config_service.get_files_location()
+        if not self.files_dir:
+            raise ValueError("Files location not configured")
 
-        self.sources_dir = os.path.join(self.data_dir, "sources")
-        self.cache_dir = os.path.join(self.data_dir, "cache", "sources")
+        self.sources_dir = os.path.join(self.files_dir, "sources")
+        self.cache_dir = os.path.join(self.files_dir, "cache", "sources")
         ensure_directory_exists(self.sources_dir)
         ensure_directory_exists(self.cache_dir)
 
@@ -190,16 +188,8 @@ class SourceService:
             logger.error(f"Source not found: {source_path}")
             return False
 
-        try:
-            if sys.platform == 'darwin':
-                subprocess.Popen(['open', source_path])
-            else:
-                subprocess.Popen(['xdg-open', source_path])
-            logger.info(f"Opened source directory: {source_path}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to open source directory: {e}")
-            return False
+        from utils.platform_utils import open_directory
+        return open_directory(source_path)
 
     def has_local_source(self, paper: Paper) -> bool:
         """Check if paper has local source files."""

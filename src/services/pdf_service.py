@@ -30,14 +30,14 @@ class PDFService:
         self.config_service = config_service
         self.paper_service = paper_service
 
-        # Get data directory
-        self.data_dir = config_service.get_database_location()
-        if not self.data_dir:
-            raise ValueError("Database location not configured")
+        # Get files directory (PDFs + sources + cache)
+        self.files_dir = config_service.get_files_location()
+        if not self.files_dir:
+            raise ValueError("Files location not configured")
 
         # Setup directories
-        self.pdfs_dir = os.path.join(self.data_dir, "pdfs")
-        self.cache_dir = os.path.join(self.data_dir, "cache")
+        self.pdfs_dir = os.path.join(self.files_dir, "pdfs")
+        self.cache_dir = os.path.join(self.files_dir, "cache")
         ensure_directory_exists(self.pdfs_dir)
         ensure_directory_exists(self.cache_dir)
 
