@@ -884,3 +884,137 @@ class TestMergeLibrary:
             conn.close()
             ids = [r[0] for r in papers]
             assert "2301.00001_copy2" in ids
+
+    def test_merge_keep_both_no_file_overwrite(self, config_file):
+        """keep_both must not overwrite existing paper's PDF."""
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+
+            src_pdf = os.path.join(src_dir, "pdfs", "2301.00001.pdf")
+            with open(src_pdf, 'w') as f:
+                f.write("incoming content")
+
+            dst_pdf = os.path.join(dst_dir, "pdfs", "2301.00001.pdf")
+            with open(dst_pdf, 'w') as f:
+                f.write("existing content")
+
+            _create_test_db(os.path.join(src_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "local_pdf_path": src_pdf},
+            ])
+            _create_test_db(os.path.join(dst_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "local_pdf_path": dst_pdf},
+            ])
+
+            merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_both")
+
+            # Existing PDF must be untouched
+            with open(dst_pdf) as f:
+                assert f.read() == "existing content"
+
+            # Copy should be at a different path
+            copy_pdf = os.path.join(dst_dir, "pdfs", "2301.00001_copy.pdf")
+            assert os.path.exists(copy_pdf)
+            with open(copy_pdf) as f:
+                assert f.read() == "incoming content"
+
+    def test_merge_keep_incoming_replaces_notes_and_ratings(self, config_file):
+        """keep_incoming should replace existing notes and ratings."""
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+
+            src_db = os.path.join(src_dir, "papertrail.db")
+            dst_db = os.path.join(dst_dir, "papertrail.db")
+            _create_test_db(src_db, [
+                {"arxiv_id": "2301.00001", "note_text": "New note"},
+            ])
+            # Add a rating to src
+            conn = sqlite3.connect(src_db)
+            paper_id = conn.execute(
+                "SELECT id FROM papers WHERE arxiv_id = '2301.00001'"
+            ).fetchone()[0]
+            conn.execute(
+                "INSERT INTO paper_ratings (paper_id, importance, comprehension, technicality) "
+                "VALUES (?, 'high', 'medium', 'low')", (paper_id,)
+            )
+            conn.commit()
+            conn.close()
+
+            _create_test_db(dst_db, [
+                {"arxiv_id": "2301.00001", "note_text": "Old note"},
+            ])
+
+            merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_incoming")
+
+            conn = sqlite3.connect(dst_db)
+            note = conn.execute(
+                "SELECT n.note_text FROM paper_notes n "
+                "JOIN papers p ON n.paper_id = p.id "
+                "WHERE p.arxiv_id = '2301.00001'"
+            ).fetchone()
+            rating = conn.execute(
+                "SELECT r.importance FROM paper_ratings r "
+                "JOIN papers p ON r.paper_id = p.id "
+                "WHERE p.arxiv_id = '2301.00001'"
+            ).fetchone()
+            conn.close()
+            assert note[0] == "New note"
+            assert rating[0] == "high"
+
+    def test_merge_ratings_values(self, config_file):
+        """Verify ratings values are correctly transferred."""
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+
+            src_db = os.path.join(src_dir, "papertrail.db")
+            _create_test_db(src_db, [{"arxiv_id": "2301.00001"}])
+            conn = sqlite3.connect(src_db)
+            paper_id = conn.execute(
+                "SELECT id FROM papers WHERE arxiv_id = '2301.00001'"
+            ).fetchone()[0]
+            conn.execute(
+                "INSERT INTO paper_ratings (paper_id, importance, comprehension, technicality) "
+                "VALUES (?, 'high', 'medium', 'low')", (paper_id,)
+            )
+            conn.commit()
+            conn.close()
+
+            _create_test_db(os.path.join(dst_dir, "papertrail.db"), [])
+
+            merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_existing")
+
+            conn = sqlite3.connect(os.path.join(dst_dir, "papertrail.db"))
+            rating = conn.execute(
+                "SELECT r.importance, r.comprehension, r.technicality "
+                "FROM paper_ratings r JOIN papers p ON r.paper_id = p.id "
+                "WHERE p.arxiv_id = '2301.00001'"
+            ).fetchone()
+            conn.close()
+            assert rating[0] == "high"
+            assert rating[1] == "medium"
+            assert rating[2] == "low"
+
+    def test_merge_legacy_arxiv_id_with_slash(self, config_file):
+        """Legacy arxiv IDs like hep-th/9901001 should merge without path issues."""
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+
+            # Legacy ID with slash — sanitized in filename
+            safe_id = "hep-th_9901001"
+            pdf_path = os.path.join(src_dir, "pdfs", f"{safe_id}.pdf")
+            with open(pdf_path, 'w') as f:
+                f.write("legacy paper")
+
+            _create_test_db(os.path.join(src_dir, "papertrail.db"), [
+                {"arxiv_id": "hep-th/9901001", "local_pdf_path": pdf_path},
+            ])
+            _create_test_db(os.path.join(dst_dir, "papertrail.db"), [])
+
+            merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_existing")
+
+            conn = sqlite3.connect(os.path.join(dst_dir, "papertrail.db"))
+            row = conn.execute(
+                "SELECT arxiv_id FROM papers WHERE arxiv_id = 'hep-th/9901001'"
+            ).fetchone()
+            conn.close()
+            assert row is not None
+            assert os.path.exists(os.path.join(dst_dir, "pdfs", f"{safe_id}.pdf"))

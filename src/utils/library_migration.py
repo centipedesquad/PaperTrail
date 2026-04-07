@@ -459,6 +459,7 @@ def _insert_paper_with_related(
         (new_paper_id, [(src_file_path, dst_file_path), ...])
     """
     src_paper_id = src_paper['id']
+    original_arxiv_id = src_paper['arxiv_id']
     files_to_copy = []
 
     new_pdf_path = None
@@ -469,6 +470,10 @@ def _insert_paper_with_related(
         try:
             rel = os.path.relpath(old_path, src_files_dir)
             if not rel.startswith('..'):
+                if arxiv_id != original_arxiv_id:
+                    safe_original = original_arxiv_id.replace('/', '_')
+                    safe_new = arxiv_id.replace('/', '_')
+                    rel = rel.replace(safe_original, safe_new)
                 new_pdf_path = os.path.join(dst_files_dir, rel)
                 files_to_copy.append((old_path, new_pdf_path))
         except ValueError:
@@ -479,6 +484,10 @@ def _insert_paper_with_related(
         try:
             rel = os.path.relpath(old_path, src_files_dir)
             if not rel.startswith('..'):
+                if arxiv_id != original_arxiv_id:
+                    safe_original = original_arxiv_id.replace('/', '_')
+                    safe_new = arxiv_id.replace('/', '_')
+                    rel = rel.replace(safe_original, safe_new)
                 new_source_path = os.path.join(dst_files_dir, rel)
                 files_to_copy.append((old_path, new_source_path))
         except ValueError:
