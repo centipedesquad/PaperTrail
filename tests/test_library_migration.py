@@ -917,6 +917,75 @@ class TestMergeLibrary:
             with open(copy_pdf) as f:
                 assert f.read() == "incoming content"
 
+    def test_merge_keep_both_no_overwrite_when_pattern_omits_arxiv_id(self, config_file):
+        """keep_both must not overwrite when the filename lacks the arxiv_id.
+
+        Regression for R8-8: the old code renamed the copy by string-substituting
+        the arxiv_id inside the path, so a pdf_naming_pattern without {arxiv_id}
+        (filename 'paper.pdf') produced no rename and the copy overwrote the
+        existing destination PDF.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+
+            src_pdf = os.path.join(src_dir, "pdfs", "paper.pdf")
+            with open(src_pdf, 'w') as f:
+                f.write("incoming content")
+            dst_pdf = os.path.join(dst_dir, "pdfs", "paper.pdf")
+            with open(dst_pdf, 'w') as f:
+                f.write("existing content")
+
+            _create_test_db(os.path.join(src_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "local_pdf_path": src_pdf},
+            ])
+            _create_test_db(os.path.join(dst_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "local_pdf_path": dst_pdf},
+            ])
+
+            merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_both")
+
+            with open(dst_pdf) as f:
+                assert f.read() == "existing content"  # untouched
+            copies = [p for p in os.listdir(os.path.join(dst_dir, "pdfs"))
+                      if p.startswith("paper_copy") and p.endswith(".pdf")]
+            assert copies, "expected a de-collided copy of the incoming PDF"
+            with open(os.path.join(dst_dir, "pdfs", copies[0])) as f:
+                assert f.read() == "incoming content"
+
+    def test_merge_keep_both_no_overwrite_legacy_arxiv_id(self, config_file):
+        """keep_both must not overwrite for legacy slash IDs (R8-7).
+
+        hep-th/9901001 sanitizes to 'hep-th9901001.pdf' (slash stripped), so the
+        old underscore-based substitution never matched and the copy overwrote the
+        existing destination PDF.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+
+            src_pdf = os.path.join(src_dir, "pdfs", "hep-th9901001.pdf")
+            with open(src_pdf, 'w') as f:
+                f.write("incoming content")
+            dst_pdf = os.path.join(dst_dir, "pdfs", "hep-th9901001.pdf")
+            with open(dst_pdf, 'w') as f:
+                f.write("existing content")
+
+            _create_test_db(os.path.join(src_dir, "papertrail.db"), [
+                {"arxiv_id": "hep-th/9901001", "local_pdf_path": src_pdf},
+            ])
+            _create_test_db(os.path.join(dst_dir, "papertrail.db"), [
+                {"arxiv_id": "hep-th/9901001", "local_pdf_path": dst_pdf},
+            ])
+
+            merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_both")
+
+            with open(dst_pdf) as f:
+                assert f.read() == "existing content"  # untouched
+            copies = [p for p in os.listdir(os.path.join(dst_dir, "pdfs"))
+                      if "_copy" in p and p.endswith(".pdf")]
+            assert copies, "expected a de-collided copy of the incoming PDF"
+            with open(os.path.join(dst_dir, "pdfs", copies[0])) as f:
+                assert f.read() == "incoming content"
+
     def test_merge_keep_incoming_replaces_notes_and_ratings(self, config_file):
         """keep_incoming should replace existing notes and ratings."""
         with tempfile.TemporaryDirectory() as d:
