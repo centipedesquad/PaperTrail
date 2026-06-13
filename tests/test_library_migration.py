@@ -986,6 +986,50 @@ class TestMergeLibrary:
             with open(os.path.join(dst_dir, "pdfs", copies[0])) as f:
                 assert f.read() == "incoming content"
 
+    def test_merge_migrates_older_destination_schema(self, config_file):
+        """R8-18: merging into an older-schema destination must migrate it first.
+
+        merge_library used a raw connection and never ran migrations on the
+        destination, so inserting into a pre-migration library (missing columns
+        like local_source_path) raised "no such column" and aborted the merge.
+        """
+        from database.connection import DatabaseConnection
+        from database.migration_manager import MigrationManager
+
+        with tempfile.TemporaryDirectory() as d:
+            src_db = os.path.join(d, "srcdb")
+            dst_db = os.path.join(d, "dstdb")
+            os.makedirs(src_db)
+            os.makedirs(dst_db)
+
+            # Build both with the real, current schema.
+            for path, aid in [(src_db, "2301.00001"), (dst_db, "2301.00002")]:
+                dbc = DatabaseConnection(os.path.join(path, "papertrail.db"))
+                dbc.connect()
+                MigrationManager(dbc).migrate()
+                dbc.execute(
+                    "INSERT INTO papers (arxiv_id, title, abstract, publication_date, pdf_url) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (aid, "Title", "Abstract", "2023-01-01", "http://x"),
+                )
+                dbc.close()
+
+            # Simulate an older destination: drop a column a later migration added.
+            raw = sqlite3.connect(os.path.join(dst_db, "papertrail.db"))
+            raw.execute("ALTER TABLE papers DROP COLUMN local_source_path")
+            raw.commit()
+            raw.close()
+
+            ok = merge_library(src_db, dst_db, src_db, dst_db, "keep_existing")
+
+            assert ok is True
+            conn = sqlite3.connect(os.path.join(dst_db, "papertrail.db"))
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(papers)").fetchall()]
+            ids = [r[0] for r in conn.execute("SELECT arxiv_id FROM papers").fetchall()]
+            conn.close()
+            assert "local_source_path" in cols  # migration re-added it
+            assert "2301.00001" in ids          # incoming paper merged in
+
     def test_merge_shared_files_dir_no_samefile_crash(self, config_file):
         """R8-14: merging two DBs that share one files dir must not SameFileError.
 

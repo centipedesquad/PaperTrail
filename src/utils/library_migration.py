@@ -662,6 +662,19 @@ def merge_library(
     src_db_path = os.path.join(src_db_dir, "papertrail.db")
     dst_db_path = os.path.join(dst_db_dir, "papertrail.db")
 
+    # Bring the destination schema up to date before merging. If the user picks an
+    # older PaperTrail library as the destination (e.g. a pre-migration backup), the
+    # INSERT below references columns it lacks (origin, local_source_path, ...) and
+    # would fail with "no such column". Running migrations also ensures its FTS
+    # tables/triggers exist so merged rows get indexed. Lazy import avoids a circular
+    # import (connection/migration_manager pull in repositories which import this).
+    from database.connection import DatabaseConnection
+    from database.migration_manager import MigrationManager
+    _dst_migrate = DatabaseConnection(dst_db_path)
+    _dst_migrate.connect()
+    MigrationManager(_dst_migrate).migrate()
+    _dst_migrate.close()
+
     dst_conn = sqlite3.connect(dst_db_path)
     dst_conn.row_factory = sqlite3.Row
     dst_conn.execute("PRAGMA foreign_keys = ON")
