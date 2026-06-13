@@ -102,7 +102,7 @@ Version comparison uses string ordering. `"9" > "10"` in string comparison. Curr
 
 ---
 
-## Fixed Bugs — User-Facing Impact (84 total across 8 rounds)
+## Fixed Bugs — User-Facing Impact (85 total across 8 rounds)
 
 Grouped by how the user would experience the bug.
 
@@ -132,6 +132,7 @@ Grouped by how the user would experience the bug.
 | | R3-11 | Context panel shows details for paper no longer in feed | Medium |
 | | R3-14 | Stale last_accessed timestamp after PDF open | Low |
 | | R4-13 | set_categories wrong "All Papers" count (double-counts) | Low |
+| | R8-17 | Manual prune's "Pruned N papers" status was instantly overwritten by the feed-reload message, so the user never saw the result; now shown in a dialog | Low |
 | **Notes saved to wrong paper or lost** | | | |
 | | R2-4 | Note timer fires after paper switch — saves to wrong paper | High |
 | | R3-3 | set_paper ordering — flush fires against new paper's ID | High |

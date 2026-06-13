@@ -900,7 +900,7 @@ class MainWindow(QMainWindow):
             self, "Prune Papers",
             f"This will remove papers that:\n\n"
             f"  - Were batch-fetched (not manually imported)\n"
-            f"  - Have no saved PDF\n"
+            f"  - Have no saved PDF or downloaded source\n"
             f"  - Were added more than {prune_days} days ago\n\n"
             f"This cannot be undone. Continue?",
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No
@@ -910,10 +910,16 @@ class MainWindow(QMainWindow):
 
         try:
             count = self.paper_service.prune_papers(prune_days)
-            self._update_statusbar(f"Pruned {count} paper{'s' if count != 1 else ''}", 5000)
             self.context_panel.clear_selection()
             self._load_categories()
             self._load_papers(self._build_current_filters())
+            # Report via dialog AFTER the reload: a status-bar message here would be
+            # clobbered immediately by _load_papers' own "N papers loaded" message,
+            # so the user would never see the result of this destructive action.
+            QMessageBox.information(
+                self, "Prune Complete",
+                f"Pruned {count} paper{'s' if count != 1 else ''}."
+            )
         except Exception as e:
             logger.error(f"Prune failed: {e}")
             QMessageBox.critical(self, "Prune Error", f"Failed to prune papers:\n\n{str(e)}")

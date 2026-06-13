@@ -604,3 +604,36 @@ class TestDownloadCancelUXRegression:
         mw.MainWindow._on_source_error(stub, "tar extraction failed")
         assert calls.popped == 1
         assert len(dialogs) == 1
+
+
+# ── Regression: prune result never seen in status bar (R8-17) ──
+
+class TestPruneFeedbackRegression:
+    """Manual prune reported its count via the status bar, which _load_papers
+    overwrote synchronously before it rendered. The result now shows in a dialog
+    after the reload."""
+
+    def test_prune_reports_count_via_dialog_after_reload(self, monkeypatch):
+        from ui import main_window as mw
+        from types import SimpleNamespace
+
+        order = []
+        infos = []
+        monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Yes)
+        monkeypatch.setattr(mw.QMessageBox, "information",
+                            lambda *a, **k: (order.append("info"), infos.append(a)))
+
+        stub = SimpleNamespace(
+            config_service=SimpleNamespace(get_prune_days=lambda: 30),
+            paper_service=SimpleNamespace(prune_papers=lambda days: 3),
+            context_panel=SimpleNamespace(clear_selection=lambda: order.append("clear")),
+            _load_categories=lambda: order.append("cats"),
+            _load_papers=lambda f: order.append("load"),
+            _build_current_filters=lambda: {},
+        )
+        mw.MainWindow._prune_papers(stub)
+
+        assert len(infos) == 1
+        assert "3 papers" in infos[0][2]          # count surfaced
+        assert order[-1] == "info"                # dialog shown AFTER the reload
+        assert "load" in order
