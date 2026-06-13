@@ -102,7 +102,7 @@ Version comparison uses string ordering. `"9" > "10"` in string comparison. Curr
 
 ---
 
-## Fixed Bugs — User-Facing Impact (78 total across 8 rounds)
+## Fixed Bugs — User-Facing Impact (79 total across 8 rounds)
 
 Grouped by how the user would experience the bug.
 
@@ -182,6 +182,7 @@ Grouped by how the user would experience the bug.
 | | R2-13 | Can't un-rate a paper — old values persist | Medium |
 | | R3-9 | Cleared ratings still show paper as "Rated" in filters | Medium |
 | | R6-2 | Partial rating update overwrites other dimensions with NULL | High |
+| | R8-11 | Clearing a rating to "Not rated" was silently ignored — COALESCE (added for R6-2) swallowed the clear, re-displaying the stale value on reload (regression of R2-13) | Medium |
 | **arXiv fetch returns partial/wrong data** | | | |
 | | R2-7 | Failed categories silently skipped — looks like no new papers | High |
 | | R2-8 | Legacy IDs (hep-th/9901001) stored wrong — broken dedup/URLs | High |

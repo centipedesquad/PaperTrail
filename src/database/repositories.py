@@ -17,6 +17,10 @@ from models import (
 
 logger = logging.getLogger(__name__)
 
+# Sentinel for RatingsRepository.create_or_update: distinguishes an omitted metric
+# ("leave the stored value unchanged") from an explicit None ("clear this metric").
+RATING_UNSET = object()
+
 
 def sanitize_fts5_query(query: str) -> str:
     """Sanitize user input for safe use in FTS5 MATCH queries.
@@ -600,24 +604,48 @@ class RatingsRepository:
     def create_or_update(
         self,
         paper_id: int,
-        importance: Optional[str] = None,
-        comprehension: Optional[str] = None,
-        technicality: Optional[str] = None
+        importance=RATING_UNSET,
+        comprehension=RATING_UNSET,
+        technicality=RATING_UNSET
     ) -> int:
-        """Create or update rating for a paper."""
+        """Create or update rating for a paper.
+
+        Each metric has three intents:
+          - omitted (RATING_UNSET): leave the stored value unchanged (COALESCE),
+            so a partial update never NULLs the other dimensions (R6-2).
+          - an explicit string: set it.
+          - an explicit None: CLEAR it (write NULL).
+
+        The rating widget always emits all three current values (None for a combo
+        on "-- Not rated --"), so clearing a metric now actually clears it instead
+        of being swallowed by COALESCE and re-displayed on the next reload (R8-11).
+        """
+        metrics = {
+            "importance": importance,
+            "comprehension": comprehension,
+            "technicality": technicality,
+        }
+        # On INSERT (no existing row) an unset metric stores NULL; on CONFLICT the
+        # per-column SET below decides leave-vs-overwrite. Column names are fixed
+        # literals, so building the SET clause by name is injection-safe.
+        insert_values = [paper_id] + [
+            (None if v is RATING_UNSET else v) for v in metrics.values()
+        ]
+        set_clauses = [
+            f"{col} = COALESCE(excluded.{col}, paper_ratings.{col})"
+            if v is RATING_UNSET else f"{col} = excluded.{col}"
+            for col, v in metrics.items()
+        ]
+        sql = (
+            "INSERT INTO paper_ratings "
+            "(paper_id, importance, comprehension, technicality, updated_at) "
+            "VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) "
+            "ON CONFLICT(paper_id) DO UPDATE SET "
+            + ", ".join(set_clauses)
+            + ", updated_at = CURRENT_TIMESTAMP"
+        )
         with self.db.transaction():
-            cursor = self.db.execute(
-                """
-                INSERT INTO paper_ratings (paper_id, importance, comprehension, technicality, updated_at)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(paper_id) DO UPDATE SET
-                    importance = COALESCE(excluded.importance, paper_ratings.importance),
-                    comprehension = COALESCE(excluded.comprehension, paper_ratings.comprehension),
-                    technicality = COALESCE(excluded.technicality, paper_ratings.technicality),
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (paper_id, importance, comprehension, technicality)
-            )
+            cursor = self.db.execute(sql, tuple(insert_values))
             return cursor.lastrowid
 
     def get_by_paper_id(self, paper_id: int) -> Optional[PaperRating]:

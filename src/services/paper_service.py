@@ -6,7 +6,9 @@ Orchestrates between repositories and business logic.
 import logging
 from typing import List, Optional
 from database.connection import DatabaseConnection
-from database.repositories import PaperRepository, NotesRepository, RatingsRepository
+from database.repositories import (
+    PaperRepository, NotesRepository, RatingsRepository, RATING_UNSET
+)
 from models import Paper
 
 logger = logging.getLogger(__name__)
@@ -178,11 +180,15 @@ class PaperService:
     def save_rating(
         self,
         paper_id: int,
-        importance: Optional[str] = None,
-        comprehension: Optional[str] = None,
-        technicality: Optional[str] = None
+        importance=RATING_UNSET,
+        comprehension=RATING_UNSET,
+        technicality=RATING_UNSET
     ):
-        """Save rating for a paper."""
+        """Save rating for a paper.
+
+        Forwards the RATING_UNSET sentinel so an omitted metric is left unchanged
+        while an explicit None clears it (see RatingsRepository.create_or_update).
+        """
         self.ratings_repo.create_or_update(
             paper_id,
             importance=importance,

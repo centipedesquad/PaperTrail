@@ -473,3 +473,45 @@ class TestStopAllWorkersRegression:
     def test_returns_true_when_no_workers(self):
         from ui.main_window import MainWindow
         assert MainWindow._stop_all_workers(self._stub()) is True
+
+
+# ── Regression: clearing a rating is silently ignored (R8-11) ──
+
+class TestRatingClearRegression:
+    """Clearing a rating metric back to 'Not rated' must persist.
+
+    Before the fix, an unset metric arrived as NULL and the UPSERT's
+    COALESCE(excluded.x, paper_ratings.x) fell back to the stored value, so the
+    clear was a no-op and the stale rating re-appeared on reload. The fix
+    distinguishes 'omitted' (leave — protects R6-2 partial updates) from
+    'explicit None' (clear).
+    """
+
+    def test_explicit_none_clears_one_metric(self, ratings_repo, created_paper):
+        ratings_repo.create_or_update(created_paper, importance="good",
+                                      comprehension="understood", technicality="tough")
+        ratings_repo.create_or_update(created_paper, importance=None,
+                                      comprehension="understood", technicality="tough")
+        r = ratings_repo.get_by_paper_id(created_paper)
+        assert r.importance is None       # cleared
+        assert r.comprehension == "understood"
+        assert r.technicality == "tough"
+
+    def test_save_rating_full_clear(self, paper_service, ratings_repo, created_paper):
+        ratings_repo.create_or_update(created_paper, importance="good",
+                                      comprehension="understood", technicality="tough")
+        # Widget path: all three emitted, all cleared.
+        paper_service.save_rating(created_paper, importance=None,
+                                  comprehension=None, technicality=None)
+        r = ratings_repo.get_by_paper_id(created_paper)
+        assert r.importance is None
+        assert r.comprehension is None
+        assert r.technicality is None
+
+    def test_omitted_metric_is_preserved(self, ratings_repo, created_paper):
+        # R6-2 must not regress: omitting a metric leaves it unchanged.
+        ratings_repo.create_or_update(created_paper, importance="good")
+        ratings_repo.create_or_update(created_paper, comprehension="understood")
+        r = ratings_repo.get_by_paper_id(created_paper)
+        assert r.importance == "good"
+        assert r.comprehension == "understood"
