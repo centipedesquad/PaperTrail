@@ -393,3 +393,28 @@ class TestPruneRegression:
         )
         assert paper_repo.prune(max_age_days=30) == 1
         assert paper_repo.get_by_id(pid) is None
+
+
+# ── Regression: closed DB connection silently reopens (R8-6) ──
+
+class TestClosedConnectionRegression:
+    """close() must be final.
+
+    Before the fix, close() set _connection=None but the next execute()/connect()
+    transparently recreated a live connection to the old database file. During a
+    relocation that closed the DB, a surviving worker's write would resurrect the
+    old connection and race the copy/merge. After the fix, post-close access raises.
+    """
+
+    def test_closed_connection_does_not_silently_reopen(self, tmp_path):
+        from database.connection import DatabaseConnection
+
+        db = DatabaseConnection(str(tmp_path / "t.db"))
+        db.connect()
+        db.execute("CREATE TABLE t (x INTEGER)")  # sanity: works while open
+        db.close()
+
+        with pytest.raises(RuntimeError):
+            db.execute("INSERT INTO t (x) VALUES (1)")
+        with pytest.raises(RuntimeError):
+            db.connect()
