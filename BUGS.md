@@ -102,7 +102,7 @@ Version comparison uses string ordering. `"9" > "10"` in string comparison. Curr
 
 ---
 
-## Fixed Bugs — User-Facing Impact (81 total across 8 rounds)
+## Fixed Bugs — User-Facing Impact (83 total across 8 rounds)
 
 Grouped by how the user would experience the bug.
 
@@ -138,6 +138,7 @@ Grouped by how the user would experience the bug.
 | | R8-12 | A note typed within the 2s auto-save debounce was lost when the app closed — closeEvent never flushed the pending save | Medium |
 | | R4-2 | Note auto-save flush — verified as FALSE POSITIVE (no bug) | — |
 | **Downloads fail or show wrong feedback** | | | |
+| | R8-16 | Cancelling an in-flight source download surfaced as a "Source Error: Failed to download... Download cancelled" failure dialog instead of a quiet cancellation | Medium |
 | | R1-5 | arXiv search fails on first transient error instead of retrying | Medium |
 | | R1-10 | Progress bar stuck at 0% when Content-Length header missing | Low |
 | | R2-10 | Source "stream" mode says ready but nothing opens | Medium |
@@ -154,6 +155,7 @@ Grouped by how the user would experience the bug.
 | | R7-3 | Download completion overwrites current paper selection | Medium |
 | **App hangs, crashes, or cursor stuck** | | | |
 | | R8-14 | Merging into a destination that shares the current files directory crashed with SameFileError (copying a file onto itself) | Medium |
+| | R8-15 | Cancelling a PDF download left a permanently stuck wait cursor — download_pdf swallowed InterruptedError, so the worker emitted no terminal signal to pop the cursor | Medium |
 | | R2-2 | Closing app during download crashes with thread error | Critical |
 | | R2-6 | Wait cursor permanently stuck after interrupted download | High |
 | | R3-4 | Replacing blocked worker can destroy live thread | High |

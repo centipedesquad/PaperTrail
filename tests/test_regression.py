@@ -550,3 +550,57 @@ class TestNoteFlushRegression:
         w.note_changed.connect(received.append)
         w.flush()  # no pending timer
         assert received == []
+
+
+# ── Regression: download cancellation UX (R8-15, R8-16) ──
+
+class TestDownloadCancelUXRegression:
+    """A user-initiated download cancel must restore the wait cursor and must NOT
+    pop a failure dialog. Worker emits error('Download cancelled') on cancel; the
+    handlers pop the cursor either way but suppress the dialog for cancellation."""
+
+    def _stub(self):
+        from types import SimpleNamespace
+        calls = SimpleNamespace(popped=0, status=[])
+        stub = SimpleNamespace(
+            _pop_wait_cursor=lambda: setattr(calls, "popped", calls.popped + 1),
+            _update_statusbar=lambda msg, *a: calls.status.append(msg),
+        )
+        return stub, calls
+
+    def test_pdf_cancel_pops_cursor_without_dialog(self, monkeypatch):
+        from ui import main_window as mw
+        dialogs = []
+        monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: dialogs.append(a))
+        stub, calls = self._stub()
+        mw.MainWindow._on_pdf_error(stub, "Download cancelled")
+        assert calls.popped == 1            # cursor restored
+        assert dialogs == []                # no scary error dialog
+        assert any("cancel" in m.lower() for m in calls.status)
+
+    def test_pdf_real_error_still_shows_dialog(self, monkeypatch):
+        from ui import main_window as mw
+        dialogs = []
+        monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: dialogs.append(a))
+        stub, calls = self._stub()
+        mw.MainWindow._on_pdf_error(stub, "Connection refused")
+        assert calls.popped == 1
+        assert len(dialogs) == 1            # genuine failure -> dialog
+
+    def test_source_cancel_pops_cursor_without_dialog(self, monkeypatch):
+        from ui import main_window as mw
+        dialogs = []
+        monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: dialogs.append(a))
+        stub, calls = self._stub()
+        mw.MainWindow._on_source_error(stub, "Download cancelled")
+        assert calls.popped == 1
+        assert dialogs == []
+
+    def test_source_real_error_still_shows_dialog(self, monkeypatch):
+        from ui import main_window as mw
+        dialogs = []
+        monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: dialogs.append(a))
+        stub, calls = self._stub()
+        mw.MainWindow._on_source_error(stub, "tar extraction failed")
+        assert calls.popped == 1
+        assert len(dialogs) == 1

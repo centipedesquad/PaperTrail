@@ -197,6 +197,32 @@ class TestPDFServiceErrors:
             result = pdf_service.download_pdf(self._make_paper(), permanent=False)
         assert result is None
 
+    def test_download_propagates_cancellation(self, db):
+        """R8-15: a cancelled download must raise InterruptedError, not return None.
+
+        Returning None left PDFDownloadWorker.run on its silent cancellation path,
+        so it emitted no terminal signal and the wait cursor was never restored.
+        Re-raising lets run()'s except InterruptedError emit error('Download
+        cancelled'), which pops the cursor.
+        """
+        pdf_service = self._make_pdf_service(db)
+        mock_response = MagicMock()
+        mock_response.raise_for_status.return_value = None
+        mock_response.headers = {'content-length': '8192'}
+        mock_response.iter_content.return_value = [b'x' * 8192]
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
+
+        def cancelling_cb(current, total):
+            raise InterruptedError("Download cancelled")
+
+        with patch('services.pdf_service.requests.get', return_value=mock_response):
+            with pytest.raises(InterruptedError):
+                pdf_service.download_pdf(
+                    self._make_paper(), permanent=False,
+                    progress_callback=cancelling_cb
+                )
+
     def test_delete_pdf_removes_file_and_clears_path(self, db, paper_service, sample_paper_data):
         import tempfile
         pdf_service = self._make_pdf_service(db)

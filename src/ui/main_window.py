@@ -721,6 +721,10 @@ class MainWindow(QMainWindow):
 
     def _on_source_error(self, error: str):
         self._pop_wait_cursor()
+        if error == "Download cancelled":
+            # User-initiated cancel (e.g. starting another download) is not a failure.
+            self._update_statusbar("Source download cancelled", 3000)
+            return
         self._update_statusbar("Source download failed", 5000)
         QMessageBox.critical(self, "Source Error", f"Failed to download source files:\n\n{error}")
 
@@ -873,6 +877,10 @@ class MainWindow(QMainWindow):
 
     def _on_pdf_error(self, error: str):
         self._pop_wait_cursor()
+        if error == "Download cancelled":
+            # User-initiated cancel (e.g. starting another download) is not a failure.
+            self._update_statusbar("PDF download cancelled", 3000)
+            return
         self._update_statusbar("PDF download failed", 5000)
         QMessageBox.critical(self, "Download Error", f"Failed to download PDF:\n\n{error}")
 
