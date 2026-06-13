@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from models import Paper
 from ui.widgets.paper_cell_widget import PaperCellWidget
+from ui.widgets.link_label import LinkLabel
 from ui.theme import get_theme_manager
 
 logger = logging.getLogger(__name__)
@@ -328,11 +329,28 @@ class PaperFeedWidget(QWidget):
         primary_cat = paper_data.get('primary_category', '')
         pub_date = paper_data.get('publication_date', '')
         year = pub_date[:4] if pub_date else ''
-        meta_parts = [s for s in [arxiv_id, primary_cat, year] if s]
-        meta_label = QLabel(" \u00b7 ".join(meta_parts))
-        meta_label.setFont(theme.get_mono_font(size_pt=9))
-        meta_label.setStyleSheet(f"color: {theme.get_color('text_secondary')};")
-        card_layout.addWidget(meta_label)
+        rest_parts = [s for s in [primary_cat, year] if s]
+        mono9 = theme.get_mono_font(size_pt=9)
+        if arxiv_id:
+            meta_row = QHBoxLayout()
+            meta_row.setContentsMargins(0, 0, 0, 0)
+            meta_row.setSpacing(0)
+            arxiv_link = LinkLabel(
+                arxiv_id, href=f"https://arxiv.org/abs/{arxiv_id}", font=mono9
+            )
+            meta_row.addWidget(arxiv_link)
+            if rest_parts:
+                rest_label = QLabel(" \u00b7 " + " \u00b7 ".join(rest_parts))
+                rest_label.setFont(mono9)
+                rest_label.setStyleSheet(f"color: {theme.get_color('text_secondary')};")
+                meta_row.addWidget(rest_label)
+            meta_row.addStretch()
+            card_layout.addLayout(meta_row)
+        else:
+            meta_label = QLabel(" \u00b7 ".join(rest_parts))
+            meta_label.setFont(mono9)
+            meta_label.setStyleSheet(f"color: {theme.get_color('text_secondary')};")
+            card_layout.addWidget(meta_label)
 
         # Abstract (max 3 lines)
         abstract = paper_data.get('abstract', '')

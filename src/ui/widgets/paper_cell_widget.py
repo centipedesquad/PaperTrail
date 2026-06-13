@@ -13,6 +13,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QCursor
 from models import Paper
 from ui.theme import get_theme_manager
+from ui.widgets.link_label import LinkLabel
 
 logger = logging.getLogger(__name__)
 
@@ -77,10 +78,16 @@ class PaperCellWidget(QWidget):
         meta_layout.setContentsMargins(0, 2, 0, 2)
         meta_layout.setSpacing(12)
 
-        arxiv_label = QLabel(f"arXiv:{self.paper.arxiv_id}")
-        arxiv_label.setFont(theme.get_mono_font(size_pt=int(base_font_size * 0.82)))
-        arxiv_label.setStyleSheet(f"color: {theme.get_color('text_tertiary')}; border: none; background: transparent;")
-        meta_layout.addWidget(arxiv_label)
+        # arXiv ID — a clickable link to the abstract page. Skip it entirely for
+        # the defensive empty-id case (no current code path produces one) so we
+        # never render a bare "arXiv:" stub.
+        if self.paper.arxiv_id:
+            arxiv_label = LinkLabel(
+                f"arXiv:{self.paper.arxiv_id}",
+                href=f"https://arxiv.org/abs/{self.paper.arxiv_id}",
+                font=theme.get_mono_font(size_pt=int(base_font_size * 0.82)),
+            )
+            meta_layout.addWidget(arxiv_label)
 
         if self.paper.categories:
             primary_cat = self.paper.categories[0].code if self.paper.categories else ""

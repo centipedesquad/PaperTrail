@@ -13,6 +13,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from models import Paper
 from ui.theme import get_theme_manager, FONT_MONO_STACK
+from ui.widgets.link_label import LinkLabel
 from ui.widgets.rating_widget import RatingWidget
 from ui.widgets.note_editor_widget import NoteEditorWidget
 from utils.platform_utils import get_file_manager_name
@@ -94,6 +95,13 @@ class ContextPanelWidget(QWidget):
             border: none;
         """)
         detail_layout.addWidget(self.paper_title_label)
+
+        # arXiv ID — clickable link to the abstract page (above the rest of the
+        # metadata, which stays plain text).
+        self.paper_arxiv_link = LinkLabel(
+            "", font=theme.get_mono_font(size_pt=int(base_font_size * 0.82))
+        )
+        detail_layout.addWidget(self.paper_arxiv_link)
 
         self.paper_meta_label = QLabel()
         self.paper_meta_label.setWordWrap(True)
@@ -278,14 +286,16 @@ class ContextPanelWidget(QWidget):
         # Title
         self.paper_title_label.setText(paper.title)
 
-        # Metadata
+        # Metadata — arXiv ID is a clickable link; the rest stays plain text.
+        if paper.arxiv_id:
+            self.paper_arxiv_link.setText(f"arXiv:{paper.arxiv_id}")
+            self.paper_arxiv_link.set_href(f"https://arxiv.org/abs/{paper.arxiv_id}")
+            self.paper_arxiv_link.setVisible(True)
+        else:
+            self.paper_arxiv_link.setVisible(False)
         categories = ", ".join([c.code for c in paper.categories]) if paper.categories else ""
-        meta_lines = [
-            f"arXiv:{paper.arxiv_id}",
-            categories,
-            f"Published: {paper.publication_date}",
-        ]
-        self.paper_meta_label.setText("\n".join(meta_lines))
+        meta_lines = [categories, f"Published: {paper.publication_date}"]
+        self.paper_meta_label.setText("\n".join([line for line in meta_lines if line]))
 
         # Ratings
         if paper.ratings:
