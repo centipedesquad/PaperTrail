@@ -518,6 +518,25 @@ class PaperRepository:
                 )
 
 
+    def delete(self, paper_id: int) -> bool:
+        """Delete a paper by ID. CASCADE + FTS triggers handle cleanup."""
+        cursor = self.db.execute("DELETE FROM papers WHERE id = ?", (paper_id,))
+        return cursor.rowcount > 0
+
+    def prune(self, max_age_days: int = 30) -> int:
+        """Delete fetched papers with no saved PDF older than max_age_days. Returns count deleted."""
+        max_age_days = max(max_age_days, 1)
+        with self.db.transaction():
+            cursor = self.db.execute(
+                """DELETE FROM papers
+                   WHERE local_pdf_path IS NULL
+                     AND origin = 'fetch'
+                     AND date_added < datetime('now', ? || ' days')""",
+                (f"-{max_age_days}",)
+            )
+            return cursor.rowcount
+
+
 class NotesRepository:
     """Repository for paper notes operations."""
 

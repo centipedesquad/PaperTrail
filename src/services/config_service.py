@@ -202,3 +202,21 @@ class ConfigService:
         except (FileNotFoundError, ValueError):
             db_dir = self.get_database_location() or location
         write_config(db_dir, location)
+    def get_auto_prune_enabled(self) -> bool:
+        """Get whether auto-prune at startup is enabled."""
+        return self.get('auto_prune_enabled', 'false') == 'true'
+
+    def set_auto_prune_enabled(self, enabled: bool):
+        """Set whether auto-prune at startup is enabled."""
+        self.set('auto_prune_enabled', 'true' if enabled else 'false')
+
+    def get_prune_days(self) -> int:
+        """Get the age threshold for pruning (in days)."""
+        try:
+            return int(self.get('prune_days', '30'))
+        except ValueError:
+            return 30
+
+    def set_prune_days(self, days: int):
+        """Set the age threshold for pruning (in days)."""
+        self.set('prune_days', str(days))

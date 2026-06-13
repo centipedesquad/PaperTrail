@@ -31,6 +31,7 @@ class ContextPanelWidget(QWidget):
     delete_source_requested = Signal(int) # paper_id
     rating_changed = Signal(int, str, str, str)  # paper_id, importance, comprehension, technicality
     note_changed = Signal(int, str)    # paper_id, note_text
+    remove_paper_requested = Signal(int)  # paper_id
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -215,6 +216,33 @@ class ContextPanelWidget(QWidget):
         self.note_editor.note_changed.connect(self._on_note_changed)
         detail_layout.addWidget(self.note_editor)
 
+        detail_layout.addSpacing(16)
+
+        # Section: Manage
+        detail_layout.addWidget(self._make_section_heading("Manage"))
+
+        self.remove_paper_button = QPushButton("Remove Paper")
+        self.remove_paper_button.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {theme.get_color('error')};
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 2px;
+                font-family: 'DM Sans';
+                font-size: {max(int(base_font_size * 0.85), 9)}pt;
+                font-weight: 500;
+            }}
+            QPushButton:hover {{
+                background-color: {theme.get_color('error_hover')};
+            }}
+            QPushButton:pressed {{
+                background-color: {theme.get_color('error_pressed')};
+            }}
+        """)
+        self.remove_paper_button.clicked.connect(self._on_remove_paper)
+        detail_layout.addWidget(self.remove_paper_button)
+
         detail_layout.addStretch()
 
         self.detail_widget.setVisible(False)
@@ -365,3 +393,7 @@ class ContextPanelWidget(QWidget):
     def _on_note_changed(self, note_text):
         if self.current_paper:
             self.note_changed.emit(self.current_paper.id, note_text)
+
+    def _on_remove_paper(self):
+        if self.current_paper:
+            self.remove_paper_requested.emit(self.current_paper.id)

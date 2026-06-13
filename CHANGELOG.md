@@ -2,6 +2,21 @@
 
 All notable changes to PaperTrail are documented in this file.
 
+## Unreleased
+
+### Added
+
+- Added manual pruning for old batch-fetched papers that have no saved PDF, including a sidebar action, confirmation dialog, configurable age threshold, and status refresh after pruning.
+- Added optional startup auto-pruning with Preferences controls for enabling the behavior and choosing the pruning threshold.
+- Added an individual "Remove Paper" action in the context panel that deletes the database record and associated local PDF/source files.
+- Added repository and service support for paper deletion and pruning, relying on cascade/FTS cleanup for related data.
+- Added a pytest suite covering database repositories, service behavior, migrations, library relocation and merge workflows, filename utilities, and regression cases for FTS5 searches, batch imports, and concurrent database access.
+- Added shared test fixtures for isolated migrated test databases and reusable sample paper records.
+
+### Changed
+
+- Bumped PaperTrail metadata, About dialog, and build documentation from 0.8.0 to 0.9.0.
+
 ## v0.8.0 — 2026-04-07
 
 ### Added

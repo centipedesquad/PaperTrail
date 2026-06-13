@@ -6,6 +6,7 @@ Three-column layout: nav rail | paper feed | context panel.
 import os
 import re
 import sys
+import shutil
 import logging
 import subprocess
 from PySide6.QtWidgets import (
@@ -117,6 +118,7 @@ class MainWindow(QMainWindow):
         self.context_panel.delete_source_requested.connect(self._on_delete_source)
         self.context_panel.rating_changed.connect(self._on_rating_changed)
         self.context_panel.note_changed.connect(self._on_note_changed)
+        self.context_panel.remove_paper_requested.connect(self._on_remove_paper)
         splitter.addWidget(self.context_panel)
 
         # Splitter proportions
@@ -320,6 +322,9 @@ class MainWindow(QMainWindow):
             return
         elif action == "action_prefs":
             self._show_preferences()
+            return
+        elif action == "action_prune":
+            self._prune_papers()
             return
 
         # Update feed title
@@ -867,12 +872,99 @@ class MainWindow(QMainWindow):
         if dialog.exec() == QDialog.Accepted:
             self._update_statusbar("Preferences saved", 2000)
 
+    def _prune_papers(self):
+        """Manual prune: delete old fetched papers without saved PDFs."""
+        prune_days = self.config_service.get_prune_days()
+
+        reply = QMessageBox.question(
+            self, "Prune Papers",
+            f"This will remove papers that:\n\n"
+            f"  - Were batch-fetched (not manually imported)\n"
+            f"  - Have no saved PDF\n"
+            f"  - Were added more than {prune_days} days ago\n\n"
+            f"This cannot be undone. Continue?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            count = self.paper_service.prune_papers(prune_days)
+            self._update_statusbar(f"Pruned {count} paper{'s' if count != 1 else ''}", 5000)
+            self.context_panel.clear_selection()
+            self._load_categories()
+            self._load_papers(self._build_current_filters())
+        except Exception as e:
+            logger.error(f"Prune failed: {e}")
+            QMessageBox.critical(self, "Prune Error", f"Failed to prune papers:\n\n{str(e)}")
+
+    def _on_remove_paper(self, paper_id: int):
+        """Remove the currently selected paper from the database."""
+        paper = self.paper_service.get_paper(paper_id)
+        if not paper:
+            return
+
+        reply = QMessageBox.question(
+            self, "Remove Paper",
+            f"Remove this paper from your library?\n\n{paper.title}\n\n"
+            f"This will also delete any saved PDF, ratings, and notes.\n"
+            f"This cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            # Delete local PDF file if it exists
+            if paper.local_pdf_path:
+                try:
+                    os.remove(paper.local_pdf_path)
+                except OSError:
+                    pass
+
+            # Delete local source files if they exist
+            if paper.local_source_path:
+                try:
+                    shutil.rmtree(paper.local_source_path, ignore_errors=True)
+                except OSError:
+                    pass
+
+            success = self.paper_service.delete_paper(paper_id)
+            if success:
+                self._update_statusbar("Paper removed", 3000)
+                self.context_panel.clear_selection()
+                self._load_categories()
+                self._load_papers(self._build_current_filters())
+            else:
+                QMessageBox.warning(self, "Error", "Paper not found.")
+        except Exception as e:
+            logger.error(f"Failed to remove paper: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to remove paper:\n\n{str(e)}")
+
+    def refresh(self):
+        """Public method to reload categories and papers."""
+        self._load_categories()
+        self._load_papers(self._build_current_filters())
+
+    def auto_prune(self):
+        """Run auto-prune if enabled. Called via QTimer after event loop starts."""
+        if not self.config_service.get_auto_prune_enabled():
+            return
+        prune_days = self.config_service.get_prune_days()
+        try:
+            pruned = self.paper_service.prune_papers(prune_days)
+            if pruned > 0:
+                logger.info(f"Auto-pruned {pruned} papers older than {prune_days} days")
+                self.refresh()
+        except Exception as e:
+            logger.error(f"Auto-prune failed: {e}")
+
     def _show_about(self):
         QMessageBox.about(
             self, "About PaperTrail",
             "<h3>PaperTrail</h3>"
             "<p>arXiv Paper Management Application</p>"
-            "<p>Version 0.8.0</p>"
+            "<p>Version 0.9.0</p>"
         )
 
     def closeEvent(self, event):

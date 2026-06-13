@@ -175,6 +175,10 @@ class FilterPanelWidget(QWidget):
         prefs_item.clicked.connect(self._on_action_clicked)
         self.container_layout.addWidget(prefs_item)
 
+        prune_item = NavItem("Prune Papers", key="action_prune")
+        prune_item.clicked.connect(self._on_action_clicked)
+        self.container_layout.addWidget(prune_item)
+
         self.container_layout.addStretch()
 
         scroll.setWidget(container)
