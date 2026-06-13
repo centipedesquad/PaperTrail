@@ -741,29 +741,34 @@ def merge_library(
                         f"Merging paper {processed}/{total_papers}"
                     )
 
+            # Phase 3: Copy files BEFORE committing. If a copy fails (disk full,
+            # permission, SameFileError) or the user cancels, ROLLBACK leaves the
+            # destination database unchanged — matching the "your library is
+            # unchanged" message shown on failure. Committing first (the old order)
+            # left committed rows pointing at files that were never copied.
+            total_files = len(files_to_copy)
+            for i, (src_path, dst_path) in enumerate(files_to_copy):
+                if cancelled and cancelled():
+                    dst_conn.execute("ROLLBACK")
+                    return False
+
+                if src_path and os.path.exists(src_path):
+                    os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+                    if os.path.isdir(src_path):
+                        shutil.copytree(src_path, dst_path, dirs_exist_ok=True)
+                    else:
+                        shutil.copy2(src_path, dst_path)
+
+                if progress_callback and total_files > 0:
+                    pct = 50 + int(((i + 1) / total_files) * 50)
+                    progress_callback(pct, 100, os.path.basename(str(dst_path)))
+
             dst_conn.execute("COMMIT")
         except Exception:
             dst_conn.execute("ROLLBACK")
             raise
 
-        # Phase 3: Copy files
-        total_files = len(files_to_copy)
-        for i, (src_path, dst_path) in enumerate(files_to_copy):
-            if cancelled and cancelled():
-                return False
-
-            if src_path and os.path.exists(src_path):
-                os.makedirs(os.path.dirname(dst_path), exist_ok=True)
-                if os.path.isdir(src_path):
-                    shutil.copytree(src_path, dst_path, dirs_exist_ok=True)
-                else:
-                    shutil.copy2(src_path, dst_path)
-
-            if progress_callback and total_files > 0:
-                pct = 50 + int(((i + 1) / total_files) * 50)
-                progress_callback(pct, 100, os.path.basename(str(dst_path)))
-
-        # Phase 4: Update config
+        # Phase 4: Update config (only after the DB commit AND file copy succeed)
         write_config(dst_db_dir, dst_files_dir, src_db_dir, src_files_dir)
 
         logger.info(f"Library merge completed: {processed} papers processed, "

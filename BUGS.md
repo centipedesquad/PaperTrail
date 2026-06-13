@@ -102,7 +102,7 @@ Version comparison uses string ordering. `"9" > "10"` in string comparison. Curr
 
 ---
 
-## Fixed Bugs — User-Facing Impact (77 total across 8 rounds)
+## Fixed Bugs — User-Facing Impact (78 total across 8 rounds)
 
 Grouped by how the user would experience the bug.
 
@@ -168,6 +168,7 @@ Grouped by how the user would experience the bug.
 | | R8-5 | Library relocation ignored whether download workers actually stopped (wait() result discarded) and closed the DB anyway — a surviving worker could corrupt the copied/merged database | High |
 | | R8-7 | keep_both merge overwrote the existing PDF/source for legacy arXiv IDs (slash stripped, so the rename substitution never matched) — silent data loss | High |
 | | R8-8 | keep_both merge overwrote the existing PDF/source when the naming pattern omits {arxiv_id} (rename substitution no-op) — silent data loss | High |
+| | R8-9 | Merge committed inserted papers before copying their files; a copy failure/cancel left the destination DB referencing files that were never copied while the UI claimed the library was unchanged | High |
 | | R2-3 | SQL interleaving across threads can corrupt database | Critical |
 | | R1-3 | HTTP response stream leak — sockets accumulate | High |
 | | R2-9 | Same stream leak in PDFService code path | High |

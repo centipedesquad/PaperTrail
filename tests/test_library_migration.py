@@ -986,6 +986,41 @@ class TestMergeLibrary:
             with open(os.path.join(dst_dir, "pdfs", copies[0])) as f:
                 assert f.read() == "incoming content"
 
+    def test_merge_rolls_back_db_when_file_copy_fails(self, config_file, monkeypatch):
+        """R8-9: a Phase-3 file-copy failure must roll back the DB, not leave it mutated.
+
+        Old order committed the inserts before copying files, so a copy failure
+        left the destination DB referencing files that were never copied while the
+        UI reported the library unchanged. Now files copy inside the transaction.
+        """
+        import utils.library_migration as lm
+
+        def _boom(*args, **kwargs):
+            raise OSError("disk full")
+
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+            src_pdf = os.path.join(src_dir, "pdfs", "2301.00001.pdf")
+            with open(src_pdf, 'w') as f:
+                f.write("incoming")
+            _create_test_db(os.path.join(src_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "local_pdf_path": src_pdf},
+            ])
+            _create_test_db(os.path.join(dst_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00002", "title": "Existing"},
+            ])
+
+            monkeypatch.setattr(lm.shutil, "copy2", _boom)
+
+            with pytest.raises(OSError):
+                merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_existing")
+
+            conn = sqlite3.connect(os.path.join(dst_dir, "papertrail.db"))
+            ids = [r[0] for r in conn.execute("SELECT arxiv_id FROM papers").fetchall()]
+            conn.close()
+            assert "2301.00001" not in ids, "incoming paper must not be committed if its file copy failed"
+            assert "2301.00002" in ids
+
     def test_merge_keep_incoming_replaces_notes_and_ratings(self, config_file):
         """keep_incoming should replace existing notes and ratings."""
         with tempfile.TemporaryDirectory() as d:
