@@ -524,12 +524,22 @@ class PaperRepository:
         return cursor.rowcount > 0
 
     def prune(self, max_age_days: int = 30) -> int:
-        """Delete fetched papers with no saved PDF older than max_age_days. Returns count deleted."""
+        """Delete old fetched papers that have no saved content. Returns count deleted.
+
+        "No saved content" means neither a downloaded PDF nor a downloaded source
+        tree: a paper whose source tarball was permanently downloaded has
+        local_source_path set (even while local_pdf_path stays NULL), and pruning it
+        would both destroy a paper the user engaged with and orphan its extracted
+        source directory on disk (prune does not delete files). Excluding
+        local_source_path IS NOT NULL papers keeps prune to genuinely untouched
+        fetches, which by definition have nothing on disk to clean up.
+        """
         max_age_days = max(max_age_days, 1)
         with self.db.transaction():
             cursor = self.db.execute(
                 """DELETE FROM papers
                    WHERE local_pdf_path IS NULL
+                     AND local_source_path IS NULL
                      AND origin = 'fetch'
                      AND date_added < datetime('now', ? || ' days')""",
                 (f"-{max_age_days}",)

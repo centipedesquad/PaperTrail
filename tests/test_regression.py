@@ -347,3 +347,49 @@ class TestPaperDeleteFtsRegression:
         )
         assert row is not None
         assert "WHEN EXISTS" in (row["sql"] or "").upper()
+
+
+# ── Regression: prune destroys papers with downloaded source (R8-4) ──
+
+class TestPruneRegression:
+    """prune() must only remove genuinely untouched fetches.
+
+    Before the fix, prune used only `local_pdf_path IS NULL`, so a fetched paper
+    whose source tarball was permanently downloaded (local_source_path set,
+    local_pdf_path still NULL) was deleted — destroying a paper the user engaged
+    with and orphaning its extracted source directory on disk forever.
+    """
+
+    def _make_old_fetched(self, db, paper_repo, sample_paper_data, **cols):
+        pid = paper_repo.create(sample_paper_data)
+        db.execute(
+            "UPDATE papers SET origin='fetch', date_added=datetime('now','-100 days') WHERE id=?",
+            (pid,),
+        )
+        for col, val in cols.items():
+            db.execute(f"UPDATE papers SET {col}=? WHERE id=?", (val, pid))
+        return pid
+
+    def test_prune_keeps_paper_with_downloaded_source(self, db, paper_repo, sample_paper_data):
+        pid = self._make_old_fetched(
+            db, paper_repo, sample_paper_data,
+            local_pdf_path=None, local_source_path='/tmp/pt/sources/2301.12345',
+        )
+        assert paper_repo.prune(max_age_days=30) == 0
+        assert paper_repo.get_by_id(pid) is not None
+
+    def test_prune_keeps_paper_with_pdf(self, db, paper_repo, sample_paper_data):
+        pid = self._make_old_fetched(
+            db, paper_repo, sample_paper_data,
+            local_pdf_path='/tmp/pt/pdfs/x.pdf', local_source_path=None,
+        )
+        assert paper_repo.prune(max_age_days=30) == 0
+        assert paper_repo.get_by_id(pid) is not None
+
+    def test_prune_still_removes_contentless_fetch(self, db, paper_repo, sample_paper_data):
+        pid = self._make_old_fetched(
+            db, paper_repo, sample_paper_data,
+            local_pdf_path=None, local_source_path=None,
+        )
+        assert paper_repo.prune(max_age_days=30) == 1
+        assert paper_repo.get_by_id(pid) is None
