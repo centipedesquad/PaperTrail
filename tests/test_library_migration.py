@@ -986,6 +986,41 @@ class TestMergeLibrary:
             with open(os.path.join(dst_dir, "pdfs", copies[0])) as f:
                 assert f.read() == "incoming content"
 
+    def test_merge_shared_files_dir_no_samefile_crash(self, config_file):
+        """R8-14: merging two DBs that share one files dir must not SameFileError.
+
+        With a shared files directory, a paper's source and destination paths
+        resolve to the same file. copy2(x, x) raised shutil.SameFileError and
+        aborted the merge; the file is already in place, so the copy is skipped.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            src_db = os.path.join(d, "srcdb")
+            dst_db = os.path.join(d, "dstdb")
+            shared = os.path.join(d, "files")
+            os.makedirs(src_db)
+            os.makedirs(dst_db)
+            os.makedirs(os.path.join(shared, "pdfs"))
+
+            pdf = os.path.join(shared, "pdfs", "2301.00001.pdf")
+            with open(pdf, 'w') as f:
+                f.write("content")
+
+            _create_test_db(os.path.join(src_db, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "local_pdf_path": pdf},
+            ])
+            _create_test_db(os.path.join(dst_db, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "local_pdf_path": pdf},
+            ])
+
+            # Shared files dir for both sides; keep_incoming re-inserts -> would
+            # copy the file onto itself.
+            ok = merge_library(src_db, dst_db, shared, shared, "keep_incoming")
+
+            assert ok is True
+            assert os.path.exists(pdf)
+            with open(pdf) as f:
+                assert f.read() == "content"  # untouched, not corrupted
+
     def test_merge_rolls_back_db_when_file_copy_fails(self, config_file, monkeypatch):
         """R8-9: a Phase-3 file-copy failure must roll back the DB, not leave it mutated.
 

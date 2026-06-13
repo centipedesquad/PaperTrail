@@ -102,7 +102,7 @@ Version comparison uses string ordering. `"9" > "10"` in string comparison. Curr
 
 ---
 
-## Fixed Bugs — User-Facing Impact (80 total across 8 rounds)
+## Fixed Bugs — User-Facing Impact (81 total across 8 rounds)
 
 Grouped by how the user would experience the bug.
 
@@ -153,6 +153,7 @@ Grouped by how the user would experience the bug.
 | | R7-2 | Partial PDF downloads leave orphaned files on failure | Medium |
 | | R7-3 | Download completion overwrites current paper selection | Medium |
 | **App hangs, crashes, or cursor stuck** | | | |
+| | R8-14 | Merging into a destination that shares the current files directory crashed with SameFileError (copying a file onto itself) | Medium |
 | | R2-2 | Closing app during download crashes with thread error | Critical |
 | | R2-6 | Wait cursor permanently stuck after interrupted download | High |
 | | R3-4 | Replacing blocked worker can destroy live thread | High |

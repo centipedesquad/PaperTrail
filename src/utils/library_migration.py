@@ -752,7 +752,13 @@ def merge_library(
                     dst_conn.execute("ROLLBACK")
                     return False
 
-                if src_path and os.path.exists(src_path):
+                # Shared files directory: source and destination can resolve to the
+                # same path (e.g. merging two databases that point at one files dir).
+                # The file is already in place; copying it onto itself would raise
+                # shutil.SameFileError, so skip it.
+                same_file = (src_path and dst_path and
+                             os.path.abspath(src_path) == os.path.abspath(dst_path))
+                if src_path and os.path.exists(src_path) and not same_file:
                     os.makedirs(os.path.dirname(dst_path), exist_ok=True)
                     if os.path.isdir(src_path):
                         shutil.copytree(src_path, dst_path, dirs_exist_ok=True)
