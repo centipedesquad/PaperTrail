@@ -102,7 +102,7 @@ Version comparison uses string ordering. `"9" > "10"` in string comparison. Curr
 
 ---
 
-## Fixed Bugs — User-Facing Impact (71 total across 7 rounds)
+## Fixed Bugs — User-Facing Impact (72 total across 8 rounds)
 
 Grouped by how the user would experience the bug.
 
@@ -162,6 +162,7 @@ Grouped by how the user would experience the bug.
 | | R6-6 | Clicking paper after search crashes on non-PaperCellWidget in list | High |
 | | R7-4 | Runtime corruption recovery creates empty DB without tables | Medium |
 | **Data corruption or silent data loss** | | | |
+| | R8-1 | Deleting or pruning any paper with authors fails with "database disk image is malformed" — Remove Paper, manual prune, and auto-prune all dead on arrival (FTS author-delete trigger corrupts contentless index during the cascade) | Critical |
 | | R2-3 | SQL interleaving across threads can corrupt database | Critical |
 | | R1-3 | HTTP response stream leak — sockets accumulate | High |
 | | R2-9 | Same stream leak in PDFService code path | High |

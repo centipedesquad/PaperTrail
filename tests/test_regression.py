@@ -282,3 +282,68 @@ class TestBatchLoadRegression:
         results = paper_repo.search_papers(search_text="Attention")
         assert len(results) == 1
         assert len(results[0].authors) == 2
+
+
+# ── Regression: FTS5 author-delete trigger corrupts index on paper delete ──
+
+class TestPaperDeleteFtsRegression:
+    """Deleting or pruning a paper that has authors must not corrupt papers_fts.
+
+    Before the WHEN-EXISTS guard on papers_fts_update_authors_delete, the
+    ON DELETE CASCADE on paper_authors fired that trigger after papers_fts_delete
+    had already removed the paper's contentless-FTS row, and after the parent
+    papers row was gone. The redundant 'delete' + phantom reinsert left the index
+    inconsistent and aborted the statement with
+    "database disk image is malformed" — making per-paper Remove and prune
+    non-functional for any authored paper (i.e. every real arXiv paper).
+    """
+
+    @staticmethod
+    def _assert_fts_consistent(db):
+        # FTS5 integrity-check raises "database disk image is malformed" if corrupt.
+        db.execute("INSERT INTO papers_fts(papers_fts) VALUES('integrity-check')")
+
+    def test_delete_paper_with_authors_does_not_corrupt_fts(self, db, paper_repo, created_paper):
+        # created_paper (sample_paper_data) has two authors.
+        assert paper_repo.get_by_id(created_paper) is not None
+        deleted = paper_repo.delete(created_paper)  # used to raise DatabaseError
+        assert deleted is True
+        assert paper_repo.get_by_id(created_paper) is None
+        self._assert_fts_consistent(db)
+        # The deleted paper must no longer be findable via search.
+        assert paper_repo.search_papers(search_text="Attention") == []
+
+    def test_prune_paper_with_authors_does_not_corrupt_fts(self, db, paper_repo, sample_paper_data):
+        pid = paper_repo.create(sample_paper_data)  # two authors
+        # Make it eligible for prune: fetched, no saved PDF, old.
+        db.execute(
+            "UPDATE papers SET origin='fetch', local_pdf_path=NULL, "
+            "date_added=datetime('now','-100 days') WHERE id=?",
+            (pid,),
+        )
+        deleted = paper_repo.prune(max_age_days=30)  # used to raise inside the transaction
+        assert deleted == 1
+        assert paper_repo.get_by_id(pid) is None
+        self._assert_fts_consistent(db)
+
+    def test_deleting_one_author_still_resyncs_fts(self, db, paper_repo, created_paper):
+        # The guard must NOT suppress resync when the paper itself survives.
+        db.execute(
+            "DELETE FROM paper_authors WHERE paper_id=? AND author_id="
+            "(SELECT id FROM authors WHERE name='Noam Shazeer')",
+            (created_paper,),
+        )
+        self._assert_fts_consistent(db)
+        by_remaining = paper_repo.search_papers(search_text="Vaswani")
+        by_removed = paper_repo.search_papers(search_text="Shazeer")
+        assert any(p.id == created_paper for p in by_remaining)
+        assert all(p.id != created_paper for p in by_removed)
+
+    def test_author_delete_trigger_has_guard(self, db):
+        # Proves the migration/baseline applied the WHEN-EXISTS guard in this DB.
+        row = db.fetch_one(
+            "SELECT sql FROM sqlite_master WHERE type='trigger' "
+            "AND name='papers_fts_update_authors_delete'"
+        )
+        assert row is not None
+        assert "WHEN EXISTS" in (row["sql"] or "").upper()
