@@ -515,3 +515,38 @@ class TestRatingClearRegression:
         r = ratings_repo.get_by_paper_id(created_paper)
         assert r.importance == "good"
         assert r.comprehension == "understood"
+
+
+# ── Regression: pending note lost when app closes within debounce (R8-12) ──
+
+class TestNoteFlushRegression:
+    """A note typed within the 2s auto-save debounce must be flushed on shutdown.
+
+    closeEvent previously only stopped workers and cleaned caches, so a pending
+    debounced save never fired and the note was lost. note_editor.flush() (invoked
+    from closeEvent via context_panel.flush_pending_note) now emits the pending save.
+    """
+
+    def test_flush_emits_pending_note(self, qtbot):
+        from ui.widgets.note_editor_widget import NoteEditorWidget
+        w = NoteEditorWidget()
+        qtbot.addWidget(w)
+        received = []
+        w.note_changed.connect(received.append)
+
+        w.text_edit.setPlainText("draft typed just before quitting")
+        assert w._save_timer.isActive()  # debounce pending, not yet saved
+
+        w.flush()
+
+        assert received == ["draft typed just before quitting"]
+        assert not w._save_timer.isActive()
+
+    def test_flush_is_noop_when_nothing_pending(self, qtbot):
+        from ui.widgets.note_editor_widget import NoteEditorWidget
+        w = NoteEditorWidget()
+        qtbot.addWidget(w)
+        received = []
+        w.note_changed.connect(received.append)
+        w.flush()  # no pending timer
+        assert received == []

@@ -981,6 +981,12 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         logger.info("Closing main window")
+        # Flush a note typed within the 2s auto-save debounce before shutting down,
+        # so it is not lost. The DB is still open at this point.
+        try:
+            self.context_panel.flush_pending_note()
+        except Exception as e:
+            logger.error(f"Failed to flush pending note on close: {e}")
         self._stop_all_workers()
         try:
             deleted = self.pdf_service.cleanup_cache()

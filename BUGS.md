@@ -102,7 +102,7 @@ Version comparison uses string ordering. `"9" > "10"` in string comparison. Curr
 
 ---
 
-## Fixed Bugs — User-Facing Impact (79 total across 8 rounds)
+## Fixed Bugs — User-Facing Impact (80 total across 8 rounds)
 
 Grouped by how the user would experience the bug.
 
@@ -135,6 +135,7 @@ Grouped by how the user would experience the bug.
 | **Notes saved to wrong paper or lost** | | | |
 | | R2-4 | Note timer fires after paper switch — saves to wrong paper | High |
 | | R3-3 | set_paper ordering — flush fires against new paper's ID | High |
+| | R8-12 | A note typed within the 2s auto-save debounce was lost when the app closed — closeEvent never flushed the pending save | Medium |
 | | R4-2 | Note auto-save flush — verified as FALSE POSITIVE (no bug) | — |
 | **Downloads fail or show wrong feedback** | | | |
 | | R1-5 | arXiv search fails on first transient error instead of retrying | Medium |

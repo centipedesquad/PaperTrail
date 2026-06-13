@@ -103,6 +103,17 @@ class NoteEditorWidget(QWidget):
         # Clear status after 2 seconds
         QTimer.singleShot(2000, lambda: self.status_label.setText(""))
 
+    def flush(self):
+        """Immediately persist any pending debounced auto-save.
+
+        Emits note_changed with the current text if the 2s timer is still pending.
+        Called before switching papers and before the app closes, so a note typed
+        within the debounce window is not lost.
+        """
+        if self._save_timer.isActive():
+            self._save_timer.stop()
+            self._on_save_timer()
+
     def set_note(self, note_text: str):
         """
         Set note text. Flushes any pending auto-save first to prevent
@@ -112,9 +123,7 @@ class NoteEditorWidget(QWidget):
             note_text: Note content
         """
         # Flush pending save before switching content
-        if self._save_timer.isActive():
-            self._save_timer.stop()
-            self._on_save_timer()
+        self.flush()
         # Block signals while setting text
         self.text_edit.blockSignals(True)
         self.text_edit.setPlainText(note_text or "")
