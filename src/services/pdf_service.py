@@ -142,6 +142,12 @@ class PDFService:
 
             return pdf_path
 
+        except InterruptedError:
+            # User cancelled. Let it propagate so PDFDownloadWorker.run emits the
+            # terminal error('Download cancelled') signal, which pops the wait
+            # cursor. The broad handler below would otherwise swallow it (return
+            # None), leaving the cursor stuck. Matches SourceService.download_source.
+            raise
         except requests.RequestException as e:
             logger.error(f"Failed to download PDF: {e}")
             return None

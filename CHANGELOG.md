@@ -2,7 +2,29 @@
 
 All notable changes to PaperTrail are documented in this file.
 
-## Unreleased
+## v0.9.1 — 2026-06-13
+
+### Changed
+
+- Bumped PaperTrail metadata, About dialog, and build documentation from 0.9.0 to 0.9.1.
+- Linked the implementation log and deployment guide from the README documentation section.
+
+### Fixed
+
+- Deleting or pruning a paper that had authors corrupted the FTS5 index ("database disk image is malformed") and aborted the operation: the `paper_authors` cascade fired the author-delete trigger after the paper's FTS row was already removed. Added a `WHEN EXISTS` parent-paper guard to the trigger and a `fix_fts_author_delete_guard` migration to repair existing databases. Per-paper Remove and prune now work for any authored paper.
+- Pruning destroyed fetched papers whose LaTeX source archive had been permanently downloaded (PDF still absent), deleting an engaged-with paper and orphaning its extracted source directory. Prune now also requires `local_source_path` to be NULL, so it only removes genuinely untouched fetches.
+- Clearing a rating metric back to "Not rated" was silently ignored — the UPSERT's `COALESCE` fell back to the stored value and the stale rating reappeared on reload. A `RATING_UNSET` sentinel now distinguishes an omitted metric (left unchanged) from an explicit clear (written as NULL).
+- A note typed within the 2-second auto-save debounce was lost when the app closed; `closeEvent` now flushes the pending save before shutting down.
+- A closed database connection silently reopened on the next `execute()`/`connect()`, letting a worker that outlived a library relocation resurrect a connection to the old database file. `close()` is now final and post-close access raises.
+- Library relocation/merge could close the database while a download worker was still running, racing the copy/merge. `_stop_all_workers()` now reports whether every worker actually stopped, and the change-library dialog aborts with a warning if a download will not stop in time.
+- Merging with "keep both" (or any non-duplicate copy) could overwrite an existing destination file when the filename lacked the arXiv ID or used a legacy slash ID — de-collision relied on string-substituting the arXiv ID into the path. Collisions are now resolved structurally by appending `_copy`/`_copyN`, and paths claimed earlier in the same merge are tracked to avoid intra-merge clobbering.
+- Merging into an older-schema destination library failed with "no such column"; `merge_library` now brings the destination schema up to date (running migrations) before inserting.
+- Merging two databases that share one files directory crashed with `shutil.SameFileError`; copying a file onto itself is now skipped.
+- A merge committed its database inserts before copying files, so a copy failure (disk full, permission) left the destination database referencing files that were never copied while the UI reported the library unchanged. Files are now copied inside the transaction, so any failure rolls the database back.
+- Cancelling a PDF or source download left the wait cursor stuck and could surface a scary failure dialog. The download now re-raises so the worker emits its terminal signal (restoring the cursor), and the error handlers suppress the dialog for user-initiated cancellation, showing a brief status message instead.
+- The manual prune result was reported via the status bar, which `_load_papers` immediately overwrote, so the user never saw how many papers were removed. The count is now shown in a dialog after the reload.
+
+## v0.9.0 — 2026-06-13
 
 ### Added
 

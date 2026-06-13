@@ -358,6 +358,10 @@ class ContextPanelWidget(QWidget):
         else:
             self.note_editor.set_note("")
 
+    def flush_pending_note(self):
+        """Flush any pending debounced note save (e.g. before the app closes)."""
+        self.note_editor.flush()
+
     def clear_selection(self):
         """Clear the panel back to empty state."""
         # Flush pending note save before clearing

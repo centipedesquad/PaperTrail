@@ -917,6 +917,189 @@ class TestMergeLibrary:
             with open(copy_pdf) as f:
                 assert f.read() == "incoming content"
 
+    def test_merge_keep_both_no_overwrite_when_pattern_omits_arxiv_id(self, config_file):
+        """keep_both must not overwrite when the filename lacks the arxiv_id.
+
+        Regression for R8-8: the old code renamed the copy by string-substituting
+        the arxiv_id inside the path, so a pdf_naming_pattern without {arxiv_id}
+        (filename 'paper.pdf') produced no rename and the copy overwrote the
+        existing destination PDF.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+
+            src_pdf = os.path.join(src_dir, "pdfs", "paper.pdf")
+            with open(src_pdf, 'w') as f:
+                f.write("incoming content")
+            dst_pdf = os.path.join(dst_dir, "pdfs", "paper.pdf")
+            with open(dst_pdf, 'w') as f:
+                f.write("existing content")
+
+            _create_test_db(os.path.join(src_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "local_pdf_path": src_pdf},
+            ])
+            _create_test_db(os.path.join(dst_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "local_pdf_path": dst_pdf},
+            ])
+
+            merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_both")
+
+            with open(dst_pdf) as f:
+                assert f.read() == "existing content"  # untouched
+            copies = [p for p in os.listdir(os.path.join(dst_dir, "pdfs"))
+                      if p.startswith("paper_copy") and p.endswith(".pdf")]
+            assert copies, "expected a de-collided copy of the incoming PDF"
+            with open(os.path.join(dst_dir, "pdfs", copies[0])) as f:
+                assert f.read() == "incoming content"
+
+    def test_merge_keep_both_no_overwrite_legacy_arxiv_id(self, config_file):
+        """keep_both must not overwrite for legacy slash IDs (R8-7).
+
+        hep-th/9901001 sanitizes to 'hep-th9901001.pdf' (slash stripped), so the
+        old underscore-based substitution never matched and the copy overwrote the
+        existing destination PDF.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+
+            src_pdf = os.path.join(src_dir, "pdfs", "hep-th9901001.pdf")
+            with open(src_pdf, 'w') as f:
+                f.write("incoming content")
+            dst_pdf = os.path.join(dst_dir, "pdfs", "hep-th9901001.pdf")
+            with open(dst_pdf, 'w') as f:
+                f.write("existing content")
+
+            _create_test_db(os.path.join(src_dir, "papertrail.db"), [
+                {"arxiv_id": "hep-th/9901001", "local_pdf_path": src_pdf},
+            ])
+            _create_test_db(os.path.join(dst_dir, "papertrail.db"), [
+                {"arxiv_id": "hep-th/9901001", "local_pdf_path": dst_pdf},
+            ])
+
+            merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_both")
+
+            with open(dst_pdf) as f:
+                assert f.read() == "existing content"  # untouched
+            copies = [p for p in os.listdir(os.path.join(dst_dir, "pdfs"))
+                      if "_copy" in p and p.endswith(".pdf")]
+            assert copies, "expected a de-collided copy of the incoming PDF"
+            with open(os.path.join(dst_dir, "pdfs", copies[0])) as f:
+                assert f.read() == "incoming content"
+
+    def test_merge_migrates_older_destination_schema(self, config_file):
+        """R8-18: merging into an older-schema destination must migrate it first.
+
+        merge_library used a raw connection and never ran migrations on the
+        destination, so inserting into a pre-migration library (missing columns
+        like local_source_path) raised "no such column" and aborted the merge.
+        """
+        from database.connection import DatabaseConnection
+        from database.migration_manager import MigrationManager
+
+        with tempfile.TemporaryDirectory() as d:
+            src_db = os.path.join(d, "srcdb")
+            dst_db = os.path.join(d, "dstdb")
+            os.makedirs(src_db)
+            os.makedirs(dst_db)
+
+            # Build both with the real, current schema.
+            for path, aid in [(src_db, "2301.00001"), (dst_db, "2301.00002")]:
+                dbc = DatabaseConnection(os.path.join(path, "papertrail.db"))
+                dbc.connect()
+                MigrationManager(dbc).migrate()
+                dbc.execute(
+                    "INSERT INTO papers (arxiv_id, title, abstract, publication_date, pdf_url) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (aid, "Title", "Abstract", "2023-01-01", "http://x"),
+                )
+                dbc.close()
+
+            # Simulate an older destination: drop a column a later migration added.
+            raw = sqlite3.connect(os.path.join(dst_db, "papertrail.db"))
+            raw.execute("ALTER TABLE papers DROP COLUMN local_source_path")
+            raw.commit()
+            raw.close()
+
+            ok = merge_library(src_db, dst_db, src_db, dst_db, "keep_existing")
+
+            assert ok is True
+            conn = sqlite3.connect(os.path.join(dst_db, "papertrail.db"))
+            cols = [r[1] for r in conn.execute("PRAGMA table_info(papers)").fetchall()]
+            ids = [r[0] for r in conn.execute("SELECT arxiv_id FROM papers").fetchall()]
+            conn.close()
+            assert "local_source_path" in cols  # migration re-added it
+            assert "2301.00001" in ids          # incoming paper merged in
+
+    def test_merge_shared_files_dir_no_samefile_crash(self, config_file):
+        """R8-14: merging two DBs that share one files dir must not SameFileError.
+
+        With a shared files directory, a paper's source and destination paths
+        resolve to the same file. copy2(x, x) raised shutil.SameFileError and
+        aborted the merge; the file is already in place, so the copy is skipped.
+        """
+        with tempfile.TemporaryDirectory() as d:
+            src_db = os.path.join(d, "srcdb")
+            dst_db = os.path.join(d, "dstdb")
+            shared = os.path.join(d, "files")
+            os.makedirs(src_db)
+            os.makedirs(dst_db)
+            os.makedirs(os.path.join(shared, "pdfs"))
+
+            pdf = os.path.join(shared, "pdfs", "2301.00001.pdf")
+            with open(pdf, 'w') as f:
+                f.write("content")
+
+            _create_test_db(os.path.join(src_db, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "local_pdf_path": pdf},
+            ])
+            _create_test_db(os.path.join(dst_db, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "local_pdf_path": pdf},
+            ])
+
+            # Shared files dir for both sides; keep_incoming re-inserts -> would
+            # copy the file onto itself.
+            ok = merge_library(src_db, dst_db, shared, shared, "keep_incoming")
+
+            assert ok is True
+            assert os.path.exists(pdf)
+            with open(pdf) as f:
+                assert f.read() == "content"  # untouched, not corrupted
+
+    def test_merge_rolls_back_db_when_file_copy_fails(self, config_file, monkeypatch):
+        """R8-9: a Phase-3 file-copy failure must roll back the DB, not leave it mutated.
+
+        Old order committed the inserts before copying files, so a copy failure
+        left the destination DB referencing files that were never copied while the
+        UI reported the library unchanged. Now files copy inside the transaction.
+        """
+        import utils.library_migration as lm
+
+        def _boom(*args, **kwargs):
+            raise OSError("disk full")
+
+        with tempfile.TemporaryDirectory() as d:
+            src_dir, dst_dir = self._setup_dirs(d)
+            src_pdf = os.path.join(src_dir, "pdfs", "2301.00001.pdf")
+            with open(src_pdf, 'w') as f:
+                f.write("incoming")
+            _create_test_db(os.path.join(src_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00001", "local_pdf_path": src_pdf},
+            ])
+            _create_test_db(os.path.join(dst_dir, "papertrail.db"), [
+                {"arxiv_id": "2301.00002", "title": "Existing"},
+            ])
+
+            monkeypatch.setattr(lm.shutil, "copy2", _boom)
+
+            with pytest.raises(OSError):
+                merge_library(src_dir, dst_dir, src_dir, dst_dir, "keep_existing")
+
+            conn = sqlite3.connect(os.path.join(dst_dir, "papertrail.db"))
+            ids = [r[0] for r in conn.execute("SELECT arxiv_id FROM papers").fetchall()]
+            conn.close()
+            assert "2301.00001" not in ids, "incoming paper must not be committed if its file copy failed"
+            assert "2301.00002" in ids
+
     def test_merge_keep_incoming_replaces_notes_and_ratings(self, config_file):
         """keep_incoming should replace existing notes and ratings."""
         with tempfile.TemporaryDirectory() as d:

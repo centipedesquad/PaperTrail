@@ -236,14 +236,26 @@ class MainWindow(QMainWindow):
             worker.deleteLater()
             setattr(self, worker_attr, None)
 
-    def _stop_all_workers(self):
-        """Cancel and wait on all active workers."""
+    def _stop_all_workers(self) -> bool:
+        """Cancel and wait on all active workers.
+
+        Returns False if any worker did not stop within the timeout. Callers that
+        are about to close the database (library relocation/merge) MUST abort when
+        this returns False: a download worker whose socket read outlasts the
+        timeout keeps running, and after close_database() its write would either
+        race the copy/merge or (now) raise. Better to refuse the relocation and
+        ask the user to wait.
+        """
+        all_stopped = True
         for attr in ['fetch_worker', 'pdf_worker', 'source_worker',
                       'arxiv_id_worker', 'arxiv_search_worker']:
             worker = getattr(self, attr, None)
             if worker and worker.isRunning():
                 worker.cancel()
-                worker.wait(3000)
+                if not worker.wait(3000):
+                    logger.warning(f"Worker {attr} did not stop within timeout")
+                    all_stopped = False
+        return all_stopped
 
     def _push_wait_cursor(self):
         """Push a wait cursor (nestable)."""
@@ -709,6 +721,10 @@ class MainWindow(QMainWindow):
 
     def _on_source_error(self, error: str):
         self._pop_wait_cursor()
+        if error == "Download cancelled":
+            # User-initiated cancel (e.g. starting another download) is not a failure.
+            self._update_statusbar("Source download cancelled", 3000)
+            return
         self._update_statusbar("Source download failed", 5000)
         QMessageBox.critical(self, "Source Error", f"Failed to download source files:\n\n{error}")
 
@@ -861,6 +877,10 @@ class MainWindow(QMainWindow):
 
     def _on_pdf_error(self, error: str):
         self._pop_wait_cursor()
+        if error == "Download cancelled":
+            # User-initiated cancel (e.g. starting another download) is not a failure.
+            self._update_statusbar("PDF download cancelled", 3000)
+            return
         self._update_statusbar("PDF download failed", 5000)
         QMessageBox.critical(self, "Download Error", f"Failed to download PDF:\n\n{error}")
 
@@ -880,7 +900,7 @@ class MainWindow(QMainWindow):
             self, "Prune Papers",
             f"This will remove papers that:\n\n"
             f"  - Were batch-fetched (not manually imported)\n"
-            f"  - Have no saved PDF\n"
+            f"  - Have no saved PDF or downloaded source\n"
             f"  - Were added more than {prune_days} days ago\n\n"
             f"This cannot be undone. Continue?",
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No
@@ -890,10 +910,16 @@ class MainWindow(QMainWindow):
 
         try:
             count = self.paper_service.prune_papers(prune_days)
-            self._update_statusbar(f"Pruned {count} paper{'s' if count != 1 else ''}", 5000)
             self.context_panel.clear_selection()
             self._load_categories()
             self._load_papers(self._build_current_filters())
+            # Report via dialog AFTER the reload: a status-bar message here would be
+            # clobbered immediately by _load_papers' own "N papers loaded" message,
+            # so the user would never see the result of this destructive action.
+            QMessageBox.information(
+                self, "Prune Complete",
+                f"Pruned {count} paper{'s' if count != 1 else ''}."
+            )
         except Exception as e:
             logger.error(f"Prune failed: {e}")
             QMessageBox.critical(self, "Prune Error", f"Failed to prune papers:\n\n{str(e)}")
@@ -964,11 +990,17 @@ class MainWindow(QMainWindow):
             self, "About PaperTrail",
             "<h3>PaperTrail</h3>"
             "<p>arXiv Paper Management Application</p>"
-            "<p>Version 0.9.0</p>"
+            "<p>Version 0.9.1</p>"
         )
 
     def closeEvent(self, event):
         logger.info("Closing main window")
+        # Flush a note typed within the 2s auto-save debounce before shutting down,
+        # so it is not lost. The DB is still open at this point.
+        try:
+            self.context_panel.flush_pending_note()
+        except Exception as e:
+            logger.error(f"Failed to flush pending note on close: {e}")
         self._stop_all_workers()
         try:
             deleted = self.pdf_service.cleanup_cache()

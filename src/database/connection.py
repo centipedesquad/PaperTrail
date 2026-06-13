@@ -30,6 +30,7 @@ class DatabaseConnection:
         self._lock = threading.RLock()
         self._in_transaction = False
         self._recovering = False
+        self._closed = False
 
         # Ensure parent directory exists
         db_dir = os.path.dirname(db_path)
@@ -42,7 +43,17 @@ class DatabaseConnection:
 
         Returns:
             Configured SQLite connection
+
+        Raises:
+            RuntimeError: if the connection was explicitly closed. close() is final;
+                a closed connection must never silently reopen (e.g. a slow download
+                worker finishing after a relocation closed the DB would otherwise
+                reconnect to the OLD database file and race the copy/merge).
         """
+        if self._closed:
+            raise RuntimeError(
+                "Database connection has been closed and cannot be reused"
+            )
         if self._connection is None:
             self._connection = sqlite3.connect(
                 self.db_path,
@@ -125,11 +136,17 @@ class DatabaseConnection:
             self._recovering = False
 
     def close(self):
-        """Close database connection."""
+        """Close database connection.
+
+        Final: after close(), execute()/connect() raise rather than reopening, so
+        stale references (e.g. background workers that outlive a relocation) fail
+        loudly instead of resurrecting a connection to the old database file.
+        """
         if self._connection:
             self._connection.close()
             self._connection = None
             logger.info("Database connection closed")
+        self._closed = True
 
     def execute(self, query: str, params: tuple = ()) -> sqlite3.Cursor:
         """

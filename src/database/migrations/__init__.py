@@ -91,7 +91,15 @@ BEGIN
 END;
 
 -- Author DELETE trigger: BEFORE DELETE on paper_authors.
+-- WHEN guard: skip when the parent paper no longer exists. During a paper delete,
+-- the ON DELETE CASCADE on paper_authors fires this trigger AFTER the papers row is
+-- already gone and AFTER papers_fts_delete has removed the paper's FTS row. Without
+-- the guard, the redundant 'delete' + phantom reinsert against the contentless
+-- papers_fts index leaves it inconsistent ("database disk image is malformed") and
+-- aborts the delete. The guard still lets the trigger fire when an author is removed
+-- from a surviving paper, keeping the FTS author tokens in sync.
 CREATE TRIGGER IF NOT EXISTS papers_fts_update_authors_delete BEFORE DELETE ON paper_authors
+WHEN EXISTS (SELECT 1 FROM papers WHERE id = OLD.paper_id)
 BEGIN
     INSERT INTO papers_fts(papers_fts, rowid, arxiv_id, title, abstract, authors)
     VALUES('delete', OLD.paper_id,
@@ -130,6 +138,7 @@ from database.migrations import (
     add_origin_column,
     fix_fts5_group_concat_order,
     fix_notes_fts_triggers,
+    fix_fts_author_delete_guard,
 )
 
 # Ordered list of all migrations. Order matters for fresh databases.
@@ -140,4 +149,5 @@ MIGRATION_REGISTRY = [
     add_origin_column,
     fix_fts5_group_concat_order,
     fix_notes_fts_triggers,
+    fix_fts_author_delete_guard,
 ]

@@ -445,21 +445,54 @@ def _find_unique_copy_id(conn: sqlite3.Connection, arxiv_id: str) -> str:
     raise ValueError(f"Could not find unique copy ID for {arxiv_id}")
 
 
+def _unique_dst_path(path: str, claimed: set, avoid_existing: bool) -> str:
+    """Return a destination path that won't clobber another file.
+
+    Resolves collisions structurally (insert _copy/_copyN before the extension)
+    instead of relying on the arxiv_id appearing in the filename — which fails for
+    legacy IDs (the '/' is stripped, not preserved) and for naming patterns that
+    omit {arxiv_id}. Avoids:
+      - paths already claimed by an earlier file in this merge (always), and
+      - files already present on disk (when avoid_existing is True).
+    Records the chosen path in `claimed` so later files in the same merge see it.
+    """
+    def taken(p: str) -> bool:
+        return p in claimed or (avoid_existing and os.path.exists(p))
+
+    if not taken(path):
+        claimed.add(path)
+        return path
+
+    root, ext = os.path.splitext(path)
+    candidate = f"{root}_copy{ext}"
+    i = 2
+    while taken(candidate):
+        candidate = f"{root}_copy{i}{ext}"
+        i += 1
+    claimed.add(candidate)
+    return candidate
+
+
 def _insert_paper_with_related(
     dst_conn: sqlite3.Connection,
     src_paper: sqlite3.Row,
     arxiv_id: str,
     src_files_dir: str,
     dst_files_dir: str,
+    claimed_paths: set,
+    avoid_existing: bool,
 ) -> Tuple[int, list]:
     """
     Insert a paper and all related data into the destination database.
+
+    claimed_paths / avoid_existing are threaded into _unique_dst_path so the copied
+    file never overwrites an existing destination file (the keep_both / non-duplicate
+    data-loss case) or another file copied earlier in the same merge.
 
     Returns:
         (new_paper_id, [(src_file_path, dst_file_path), ...])
     """
     src_paper_id = src_paper['id']
-    original_arxiv_id = src_paper['arxiv_id']
     files_to_copy = []
 
     new_pdf_path = None
@@ -470,11 +503,8 @@ def _insert_paper_with_related(
         try:
             rel = os.path.relpath(old_path, src_files_dir)
             if not rel.startswith('..'):
-                if arxiv_id != original_arxiv_id:
-                    safe_original = original_arxiv_id.replace('/', '_')
-                    safe_new = arxiv_id.replace('/', '_')
-                    rel = rel.replace(safe_original, safe_new)
-                new_pdf_path = os.path.join(dst_files_dir, rel)
+                candidate = os.path.join(dst_files_dir, rel)
+                new_pdf_path = _unique_dst_path(candidate, claimed_paths, avoid_existing)
                 files_to_copy.append((old_path, new_pdf_path))
         except ValueError:
             pass
@@ -484,11 +514,8 @@ def _insert_paper_with_related(
         try:
             rel = os.path.relpath(old_path, src_files_dir)
             if not rel.startswith('..'):
-                if arxiv_id != original_arxiv_id:
-                    safe_original = original_arxiv_id.replace('/', '_')
-                    safe_new = arxiv_id.replace('/', '_')
-                    rel = rel.replace(safe_original, safe_new)
-                new_source_path = os.path.join(dst_files_dir, rel)
+                candidate = os.path.join(dst_files_dir, rel)
+                new_source_path = _unique_dst_path(candidate, claimed_paths, avoid_existing)
                 files_to_copy.append((old_path, new_source_path))
         except ValueError:
             pass
@@ -635,6 +662,19 @@ def merge_library(
     src_db_path = os.path.join(src_db_dir, "papertrail.db")
     dst_db_path = os.path.join(dst_db_dir, "papertrail.db")
 
+    # Bring the destination schema up to date before merging. If the user picks an
+    # older PaperTrail library as the destination (e.g. a pre-migration backup), the
+    # INSERT below references columns it lacks (origin, local_source_path, ...) and
+    # would fail with "no such column". Running migrations also ensures its FTS
+    # tables/triggers exist so merged rows get indexed. Lazy import avoids a circular
+    # import (connection/migration_manager pull in repositories which import this).
+    from database.connection import DatabaseConnection
+    from database.migration_manager import MigrationManager
+    _dst_migrate = DatabaseConnection(dst_db_path)
+    _dst_migrate.connect()
+    MigrationManager(_dst_migrate).migrate()
+    _dst_migrate.close()
+
     dst_conn = sqlite3.connect(dst_db_path)
     dst_conn.row_factory = sqlite3.Row
     dst_conn.execute("PRAGMA foreign_keys = ON")
@@ -658,6 +698,9 @@ def merge_library(
 
         files_to_copy = []
         processed = 0
+        # Destination paths already chosen in this merge, so two source files never
+        # collide on the same target. See _unique_dst_path.
+        claimed_paths = set()
 
         dst_conn.execute("BEGIN")
         try:
@@ -672,7 +715,8 @@ def merge_library(
                 if not is_duplicate:
                     _, files = _insert_paper_with_related(
                         dst_conn, src_paper, arxiv_id,
-                        src_files_dir, dst_files_dir
+                        src_files_dir, dst_files_dir,
+                        claimed_paths, avoid_existing=True
                     )
                     files_to_copy.extend(files)
 
@@ -680,21 +724,25 @@ def merge_library(
                     pass
 
                 elif duplicate_strategy == "keep_incoming":
+                    # Replacing the existing paper: overwriting its file is intended.
                     dst_conn.execute(
                         "DELETE FROM main.papers WHERE arxiv_id = ?",
                         (arxiv_id,)
                     )
                     _, files = _insert_paper_with_related(
                         dst_conn, src_paper, arxiv_id,
-                        src_files_dir, dst_files_dir
+                        src_files_dir, dst_files_dir,
+                        claimed_paths, avoid_existing=False
                     )
                     files_to_copy.extend(files)
 
                 elif duplicate_strategy == "keep_both":
+                    # Keeping both: the copy must NOT clobber the existing file.
                     new_arxiv_id = _find_unique_copy_id(dst_conn, arxiv_id)
                     _, files = _insert_paper_with_related(
                         dst_conn, src_paper, new_arxiv_id,
-                        src_files_dir, dst_files_dir
+                        src_files_dir, dst_files_dir,
+                        claimed_paths, avoid_existing=True
                     )
                     files_to_copy.extend(files)
 
@@ -706,29 +754,40 @@ def merge_library(
                         f"Merging paper {processed}/{total_papers}"
                     )
 
+            # Phase 3: Copy files BEFORE committing. If a copy fails (disk full,
+            # permission, SameFileError) or the user cancels, ROLLBACK leaves the
+            # destination database unchanged — matching the "your library is
+            # unchanged" message shown on failure. Committing first (the old order)
+            # left committed rows pointing at files that were never copied.
+            total_files = len(files_to_copy)
+            for i, (src_path, dst_path) in enumerate(files_to_copy):
+                if cancelled and cancelled():
+                    dst_conn.execute("ROLLBACK")
+                    return False
+
+                # Shared files directory: source and destination can resolve to the
+                # same path (e.g. merging two databases that point at one files dir).
+                # The file is already in place; copying it onto itself would raise
+                # shutil.SameFileError, so skip it.
+                same_file = (src_path and dst_path and
+                             os.path.abspath(src_path) == os.path.abspath(dst_path))
+                if src_path and os.path.exists(src_path) and not same_file:
+                    os.makedirs(os.path.dirname(dst_path), exist_ok=True)
+                    if os.path.isdir(src_path):
+                        shutil.copytree(src_path, dst_path, dirs_exist_ok=True)
+                    else:
+                        shutil.copy2(src_path, dst_path)
+
+                if progress_callback and total_files > 0:
+                    pct = 50 + int(((i + 1) / total_files) * 50)
+                    progress_callback(pct, 100, os.path.basename(str(dst_path)))
+
             dst_conn.execute("COMMIT")
         except Exception:
             dst_conn.execute("ROLLBACK")
             raise
 
-        # Phase 3: Copy files
-        total_files = len(files_to_copy)
-        for i, (src_path, dst_path) in enumerate(files_to_copy):
-            if cancelled and cancelled():
-                return False
-
-            if src_path and os.path.exists(src_path):
-                os.makedirs(os.path.dirname(dst_path), exist_ok=True)
-                if os.path.isdir(src_path):
-                    shutil.copytree(src_path, dst_path, dirs_exist_ok=True)
-                else:
-                    shutil.copy2(src_path, dst_path)
-
-            if progress_callback and total_files > 0:
-                pct = 50 + int(((i + 1) / total_files) * 50)
-                progress_callback(pct, 100, os.path.basename(str(dst_path)))
-
-        # Phase 4: Update config
+        # Phase 4: Update config (only after the DB commit AND file copy succeed)
         write_config(dst_db_dir, dst_files_dir, src_db_dir, src_files_dir)
 
         logger.info(f"Library merge completed: {processed} papers processed, "

@@ -282,3 +282,358 @@ class TestBatchLoadRegression:
         results = paper_repo.search_papers(search_text="Attention")
         assert len(results) == 1
         assert len(results[0].authors) == 2
+
+
+# ── Regression: FTS5 author-delete trigger corrupts index on paper delete ──
+
+class TestPaperDeleteFtsRegression:
+    """Deleting or pruning a paper that has authors must not corrupt papers_fts.
+
+    Before the WHEN-EXISTS guard on papers_fts_update_authors_delete, the
+    ON DELETE CASCADE on paper_authors fired that trigger after papers_fts_delete
+    had already removed the paper's contentless-FTS row, and after the parent
+    papers row was gone. The redundant 'delete' + phantom reinsert left the index
+    inconsistent and aborted the statement with
+    "database disk image is malformed" — making per-paper Remove and prune
+    non-functional for any authored paper (i.e. every real arXiv paper).
+    """
+
+    @staticmethod
+    def _assert_fts_consistent(db):
+        # FTS5 integrity-check raises "database disk image is malformed" if corrupt.
+        db.execute("INSERT INTO papers_fts(papers_fts) VALUES('integrity-check')")
+
+    def test_delete_paper_with_authors_does_not_corrupt_fts(self, db, paper_repo, created_paper):
+        # created_paper (sample_paper_data) has two authors.
+        assert paper_repo.get_by_id(created_paper) is not None
+        deleted = paper_repo.delete(created_paper)  # used to raise DatabaseError
+        assert deleted is True
+        assert paper_repo.get_by_id(created_paper) is None
+        self._assert_fts_consistent(db)
+        # The deleted paper must no longer be findable via search.
+        assert paper_repo.search_papers(search_text="Attention") == []
+
+    def test_prune_paper_with_authors_does_not_corrupt_fts(self, db, paper_repo, sample_paper_data):
+        pid = paper_repo.create(sample_paper_data)  # two authors
+        # Make it eligible for prune: fetched, no saved PDF, old.
+        db.execute(
+            "UPDATE papers SET origin='fetch', local_pdf_path=NULL, "
+            "date_added=datetime('now','-100 days') WHERE id=?",
+            (pid,),
+        )
+        deleted = paper_repo.prune(max_age_days=30)  # used to raise inside the transaction
+        assert deleted == 1
+        assert paper_repo.get_by_id(pid) is None
+        self._assert_fts_consistent(db)
+
+    def test_deleting_one_author_still_resyncs_fts(self, db, paper_repo, created_paper):
+        # The guard must NOT suppress resync when the paper itself survives.
+        db.execute(
+            "DELETE FROM paper_authors WHERE paper_id=? AND author_id="
+            "(SELECT id FROM authors WHERE name='Noam Shazeer')",
+            (created_paper,),
+        )
+        self._assert_fts_consistent(db)
+        by_remaining = paper_repo.search_papers(search_text="Vaswani")
+        by_removed = paper_repo.search_papers(search_text="Shazeer")
+        assert any(p.id == created_paper for p in by_remaining)
+        assert all(p.id != created_paper for p in by_removed)
+
+    def test_author_delete_trigger_has_guard(self, db):
+        # Proves the migration/baseline applied the WHEN-EXISTS guard in this DB.
+        row = db.fetch_one(
+            "SELECT sql FROM sqlite_master WHERE type='trigger' "
+            "AND name='papers_fts_update_authors_delete'"
+        )
+        assert row is not None
+        assert "WHEN EXISTS" in (row["sql"] or "").upper()
+
+
+# ── Regression: prune destroys papers with downloaded source (R8-4) ──
+
+class TestPruneRegression:
+    """prune() must only remove genuinely untouched fetches.
+
+    Before the fix, prune used only `local_pdf_path IS NULL`, so a fetched paper
+    whose source tarball was permanently downloaded (local_source_path set,
+    local_pdf_path still NULL) was deleted — destroying a paper the user engaged
+    with and orphaning its extracted source directory on disk forever.
+    """
+
+    def _make_old_fetched(self, db, paper_repo, sample_paper_data, **cols):
+        pid = paper_repo.create(sample_paper_data)
+        db.execute(
+            "UPDATE papers SET origin='fetch', date_added=datetime('now','-100 days') WHERE id=?",
+            (pid,),
+        )
+        for col, val in cols.items():
+            db.execute(f"UPDATE papers SET {col}=? WHERE id=?", (val, pid))
+        return pid
+
+    def test_prune_keeps_paper_with_downloaded_source(self, db, paper_repo, sample_paper_data):
+        pid = self._make_old_fetched(
+            db, paper_repo, sample_paper_data,
+            local_pdf_path=None, local_source_path='/tmp/pt/sources/2301.12345',
+        )
+        assert paper_repo.prune(max_age_days=30) == 0
+        assert paper_repo.get_by_id(pid) is not None
+
+    def test_prune_keeps_paper_with_pdf(self, db, paper_repo, sample_paper_data):
+        pid = self._make_old_fetched(
+            db, paper_repo, sample_paper_data,
+            local_pdf_path='/tmp/pt/pdfs/x.pdf', local_source_path=None,
+        )
+        assert paper_repo.prune(max_age_days=30) == 0
+        assert paper_repo.get_by_id(pid) is not None
+
+    def test_prune_still_removes_contentless_fetch(self, db, paper_repo, sample_paper_data):
+        pid = self._make_old_fetched(
+            db, paper_repo, sample_paper_data,
+            local_pdf_path=None, local_source_path=None,
+        )
+        assert paper_repo.prune(max_age_days=30) == 1
+        assert paper_repo.get_by_id(pid) is None
+
+
+# ── Regression: closed DB connection silently reopens (R8-6) ──
+
+class TestClosedConnectionRegression:
+    """close() must be final.
+
+    Before the fix, close() set _connection=None but the next execute()/connect()
+    transparently recreated a live connection to the old database file. During a
+    relocation that closed the DB, a surviving worker's write would resurrect the
+    old connection and race the copy/merge. After the fix, post-close access raises.
+    """
+
+    def test_closed_connection_does_not_silently_reopen(self, tmp_path):
+        from database.connection import DatabaseConnection
+
+        db = DatabaseConnection(str(tmp_path / "t.db"))
+        db.connect()
+        db.execute("CREATE TABLE t (x INTEGER)")  # sanity: works while open
+        db.close()
+
+        with pytest.raises(RuntimeError):
+            db.execute("INSERT INTO t (x) VALUES (1)")
+        with pytest.raises(RuntimeError):
+            db.connect()
+
+
+# ── Regression: relocation closes DB while a worker survives (R8-5) ──
+
+class _FakeWorker:
+    """Stand-in QThread-like worker for testing _stop_all_workers."""
+
+    def __init__(self, running: bool, stops: bool):
+        self._running = running
+        self._stops = stops
+        self.cancelled = False
+
+    def isRunning(self):
+        return self._running
+
+    def cancel(self):
+        self.cancelled = True
+
+    def wait(self, ms):
+        return self._stops
+
+
+class TestStopAllWorkersRegression:
+    """_stop_all_workers must report whether every worker actually stopped.
+
+    Before the fix it called worker.wait(3000) but ignored the result and the
+    caller (ChangeLibraryDialog._on_apply) closed the DB and migrated regardless.
+    A download whose socket read outlasted the timeout kept running and raced the
+    copy/merge. Now the method returns False and the caller aborts.
+    """
+
+    def _stub(self, **workers):
+        from types import SimpleNamespace
+        base = dict(fetch_worker=None, pdf_worker=None, source_worker=None,
+                    arxiv_id_worker=None, arxiv_search_worker=None)
+        base.update(workers)
+        return SimpleNamespace(**base)
+
+    def test_returns_false_when_a_worker_will_not_stop(self):
+        from ui.main_window import MainWindow
+        stub = self._stub(pdf_worker=_FakeWorker(running=True, stops=False))
+        assert MainWindow._stop_all_workers(stub) is False
+        assert stub.pdf_worker.cancelled is True  # it tried to cancel
+
+    def test_returns_true_when_all_workers_stop(self):
+        from ui.main_window import MainWindow
+        stub = self._stub(
+            fetch_worker=_FakeWorker(running=True, stops=True),
+            source_worker=_FakeWorker(running=False, stops=True),
+        )
+        assert MainWindow._stop_all_workers(stub) is True
+
+    def test_returns_true_when_no_workers(self):
+        from ui.main_window import MainWindow
+        assert MainWindow._stop_all_workers(self._stub()) is True
+
+
+# ── Regression: clearing a rating is silently ignored (R8-11) ──
+
+class TestRatingClearRegression:
+    """Clearing a rating metric back to 'Not rated' must persist.
+
+    Before the fix, an unset metric arrived as NULL and the UPSERT's
+    COALESCE(excluded.x, paper_ratings.x) fell back to the stored value, so the
+    clear was a no-op and the stale rating re-appeared on reload. The fix
+    distinguishes 'omitted' (leave — protects R6-2 partial updates) from
+    'explicit None' (clear).
+    """
+
+    def test_explicit_none_clears_one_metric(self, ratings_repo, created_paper):
+        ratings_repo.create_or_update(created_paper, importance="good",
+                                      comprehension="understood", technicality="tough")
+        ratings_repo.create_or_update(created_paper, importance=None,
+                                      comprehension="understood", technicality="tough")
+        r = ratings_repo.get_by_paper_id(created_paper)
+        assert r.importance is None       # cleared
+        assert r.comprehension == "understood"
+        assert r.technicality == "tough"
+
+    def test_save_rating_full_clear(self, paper_service, ratings_repo, created_paper):
+        ratings_repo.create_or_update(created_paper, importance="good",
+                                      comprehension="understood", technicality="tough")
+        # Widget path: all three emitted, all cleared.
+        paper_service.save_rating(created_paper, importance=None,
+                                  comprehension=None, technicality=None)
+        r = ratings_repo.get_by_paper_id(created_paper)
+        assert r.importance is None
+        assert r.comprehension is None
+        assert r.technicality is None
+
+    def test_omitted_metric_is_preserved(self, ratings_repo, created_paper):
+        # R6-2 must not regress: omitting a metric leaves it unchanged.
+        ratings_repo.create_or_update(created_paper, importance="good")
+        ratings_repo.create_or_update(created_paper, comprehension="understood")
+        r = ratings_repo.get_by_paper_id(created_paper)
+        assert r.importance == "good"
+        assert r.comprehension == "understood"
+
+
+# ── Regression: pending note lost when app closes within debounce (R8-12) ──
+
+class TestNoteFlushRegression:
+    """A note typed within the 2s auto-save debounce must be flushed on shutdown.
+
+    closeEvent previously only stopped workers and cleaned caches, so a pending
+    debounced save never fired and the note was lost. note_editor.flush() (invoked
+    from closeEvent via context_panel.flush_pending_note) now emits the pending save.
+    """
+
+    def test_flush_emits_pending_note(self, qtbot):
+        from ui.widgets.note_editor_widget import NoteEditorWidget
+        w = NoteEditorWidget()
+        qtbot.addWidget(w)
+        received = []
+        w.note_changed.connect(received.append)
+
+        w.text_edit.setPlainText("draft typed just before quitting")
+        assert w._save_timer.isActive()  # debounce pending, not yet saved
+
+        w.flush()
+
+        assert received == ["draft typed just before quitting"]
+        assert not w._save_timer.isActive()
+
+    def test_flush_is_noop_when_nothing_pending(self, qtbot):
+        from ui.widgets.note_editor_widget import NoteEditorWidget
+        w = NoteEditorWidget()
+        qtbot.addWidget(w)
+        received = []
+        w.note_changed.connect(received.append)
+        w.flush()  # no pending timer
+        assert received == []
+
+
+# ── Regression: download cancellation UX (R8-15, R8-16) ──
+
+class TestDownloadCancelUXRegression:
+    """A user-initiated download cancel must restore the wait cursor and must NOT
+    pop a failure dialog. Worker emits error('Download cancelled') on cancel; the
+    handlers pop the cursor either way but suppress the dialog for cancellation."""
+
+    def _stub(self):
+        from types import SimpleNamespace
+        calls = SimpleNamespace(popped=0, status=[])
+        stub = SimpleNamespace(
+            _pop_wait_cursor=lambda: setattr(calls, "popped", calls.popped + 1),
+            _update_statusbar=lambda msg, *a: calls.status.append(msg),
+        )
+        return stub, calls
+
+    def test_pdf_cancel_pops_cursor_without_dialog(self, monkeypatch):
+        from ui import main_window as mw
+        dialogs = []
+        monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: dialogs.append(a))
+        stub, calls = self._stub()
+        mw.MainWindow._on_pdf_error(stub, "Download cancelled")
+        assert calls.popped == 1            # cursor restored
+        assert dialogs == []                # no scary error dialog
+        assert any("cancel" in m.lower() for m in calls.status)
+
+    def test_pdf_real_error_still_shows_dialog(self, monkeypatch):
+        from ui import main_window as mw
+        dialogs = []
+        monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: dialogs.append(a))
+        stub, calls = self._stub()
+        mw.MainWindow._on_pdf_error(stub, "Connection refused")
+        assert calls.popped == 1
+        assert len(dialogs) == 1            # genuine failure -> dialog
+
+    def test_source_cancel_pops_cursor_without_dialog(self, monkeypatch):
+        from ui import main_window as mw
+        dialogs = []
+        monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: dialogs.append(a))
+        stub, calls = self._stub()
+        mw.MainWindow._on_source_error(stub, "Download cancelled")
+        assert calls.popped == 1
+        assert dialogs == []
+
+    def test_source_real_error_still_shows_dialog(self, monkeypatch):
+        from ui import main_window as mw
+        dialogs = []
+        monkeypatch.setattr(mw.QMessageBox, "critical", lambda *a, **k: dialogs.append(a))
+        stub, calls = self._stub()
+        mw.MainWindow._on_source_error(stub, "tar extraction failed")
+        assert calls.popped == 1
+        assert len(dialogs) == 1
+
+
+# ── Regression: prune result never seen in status bar (R8-17) ──
+
+class TestPruneFeedbackRegression:
+    """Manual prune reported its count via the status bar, which _load_papers
+    overwrote synchronously before it rendered. The result now shows in a dialog
+    after the reload."""
+
+    def test_prune_reports_count_via_dialog_after_reload(self, monkeypatch):
+        from ui import main_window as mw
+        from types import SimpleNamespace
+
+        order = []
+        infos = []
+        monkeypatch.setattr(mw.QMessageBox, "question", lambda *a, **k: mw.QMessageBox.Yes)
+        monkeypatch.setattr(mw.QMessageBox, "information",
+                            lambda *a, **k: (order.append("info"), infos.append(a)))
+
+        stub = SimpleNamespace(
+            config_service=SimpleNamespace(get_prune_days=lambda: 30),
+            paper_service=SimpleNamespace(prune_papers=lambda days: 3),
+            context_panel=SimpleNamespace(clear_selection=lambda: order.append("clear")),
+            _load_categories=lambda: order.append("cats"),
+            _load_papers=lambda f: order.append("load"),
+            _build_current_filters=lambda: {},
+        )
+        mw.MainWindow._prune_papers(stub)
+
+        assert len(infos) == 1
+        assert "3 papers" in infos[0][2]          # count surfaced
+        assert order[-1] == "info"                # dialog shown AFTER the reload
+        assert "load" in order

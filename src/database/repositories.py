@@ -17,6 +17,10 @@ from models import (
 
 logger = logging.getLogger(__name__)
 
+# Sentinel for RatingsRepository.create_or_update: distinguishes an omitted metric
+# ("leave the stored value unchanged") from an explicit None ("clear this metric").
+RATING_UNSET = object()
+
 
 def sanitize_fts5_query(query: str) -> str:
     """Sanitize user input for safe use in FTS5 MATCH queries.
@@ -524,12 +528,22 @@ class PaperRepository:
         return cursor.rowcount > 0
 
     def prune(self, max_age_days: int = 30) -> int:
-        """Delete fetched papers with no saved PDF older than max_age_days. Returns count deleted."""
+        """Delete old fetched papers that have no saved content. Returns count deleted.
+
+        "No saved content" means neither a downloaded PDF nor a downloaded source
+        tree: a paper whose source tarball was permanently downloaded has
+        local_source_path set (even while local_pdf_path stays NULL), and pruning it
+        would both destroy a paper the user engaged with and orphan its extracted
+        source directory on disk (prune does not delete files). Excluding
+        local_source_path IS NOT NULL papers keeps prune to genuinely untouched
+        fetches, which by definition have nothing on disk to clean up.
+        """
         max_age_days = max(max_age_days, 1)
         with self.db.transaction():
             cursor = self.db.execute(
                 """DELETE FROM papers
                    WHERE local_pdf_path IS NULL
+                     AND local_source_path IS NULL
                      AND origin = 'fetch'
                      AND date_added < datetime('now', ? || ' days')""",
                 (f"-{max_age_days}",)
@@ -590,24 +604,48 @@ class RatingsRepository:
     def create_or_update(
         self,
         paper_id: int,
-        importance: Optional[str] = None,
-        comprehension: Optional[str] = None,
-        technicality: Optional[str] = None
+        importance=RATING_UNSET,
+        comprehension=RATING_UNSET,
+        technicality=RATING_UNSET
     ) -> int:
-        """Create or update rating for a paper."""
+        """Create or update rating for a paper.
+
+        Each metric has three intents:
+          - omitted (RATING_UNSET): leave the stored value unchanged (COALESCE),
+            so a partial update never NULLs the other dimensions (R6-2).
+          - an explicit string: set it.
+          - an explicit None: CLEAR it (write NULL).
+
+        The rating widget always emits all three current values (None for a combo
+        on "-- Not rated --"), so clearing a metric now actually clears it instead
+        of being swallowed by COALESCE and re-displayed on the next reload (R8-11).
+        """
+        metrics = {
+            "importance": importance,
+            "comprehension": comprehension,
+            "technicality": technicality,
+        }
+        # On INSERT (no existing row) an unset metric stores NULL; on CONFLICT the
+        # per-column SET below decides leave-vs-overwrite. Column names are fixed
+        # literals, so building the SET clause by name is injection-safe.
+        insert_values = [paper_id] + [
+            (None if v is RATING_UNSET else v) for v in metrics.values()
+        ]
+        set_clauses = [
+            f"{col} = COALESCE(excluded.{col}, paper_ratings.{col})"
+            if v is RATING_UNSET else f"{col} = excluded.{col}"
+            for col, v in metrics.items()
+        ]
+        sql = (
+            "INSERT INTO paper_ratings "
+            "(paper_id, importance, comprehension, technicality, updated_at) "
+            "VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP) "
+            "ON CONFLICT(paper_id) DO UPDATE SET "
+            + ", ".join(set_clauses)
+            + ", updated_at = CURRENT_TIMESTAMP"
+        )
         with self.db.transaction():
-            cursor = self.db.execute(
-                """
-                INSERT INTO paper_ratings (paper_id, importance, comprehension, technicality, updated_at)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(paper_id) DO UPDATE SET
-                    importance = COALESCE(excluded.importance, paper_ratings.importance),
-                    comprehension = COALESCE(excluded.comprehension, paper_ratings.comprehension),
-                    technicality = COALESCE(excluded.technicality, paper_ratings.technicality),
-                    updated_at = CURRENT_TIMESTAMP
-                """,
-                (paper_id, importance, comprehension, technicality)
-            )
+            cursor = self.db.execute(sql, tuple(insert_values))
             return cursor.lastrowid
 
     def get_by_paper_id(self, paper_id: int) -> Optional[PaperRating]:

@@ -335,10 +335,19 @@ class ChangeLibraryDialog(QDialog):
             else:
                 merge_strategy = "keep_existing"
 
-        # Quiesce workers via main window
+        # Quiesce workers via main window. If a download will not stop, abort BEFORE
+        # closing the database — a surviving worker would otherwise race the
+        # copy/merge (or raise against the closed connection).
         main_window = self.parent()
         if main_window and hasattr(main_window, '_stop_all_workers'):
-            main_window._stop_all_workers()
+            if not main_window._stop_all_workers():
+                QMessageBox.warning(
+                    self,
+                    "Operation in Progress",
+                    "A download is still in progress. Please wait for it to finish "
+                    "before changing the library location, then try again."
+                )
+                return
 
         if is_merge:
             self._run_merge(new_db, new_files, merge_strategy)
