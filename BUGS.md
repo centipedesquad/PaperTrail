@@ -1,6 +1,8 @@
 # Bugs — PaperTrail
 
-*Last audited: 2026-04-01 — Round 7 by Claude (Opus 4.6)*
+*Last audited: 2026-06-13 — Round 8 by Claude (Opus 4.8), multi-agent audit workflow. All 16 distinct findings fixed (R8-1, R8-4..R8-9, R8-11, R8-12, R8-14..R8-18). Full report: `ai/round8-audit-report.md`.*
+
+*Previously audited: 2026-04-01 — Round 7 by Claude (Opus 4.6)*
 
 Bugs found by **[BOTH]** models are highest confidence.
 
