@@ -102,7 +102,7 @@ Version comparison uses string ordering. `"9" > "10"` in string comparison. Curr
 
 ---
 
-## Fixed Bugs — User-Facing Impact (74 total across 8 rounds)
+## Fixed Bugs — User-Facing Impact (75 total across 8 rounds)
 
 Grouped by how the user would experience the bug.
 
@@ -165,6 +165,7 @@ Grouped by how the user would experience the bug.
 | | R8-1 | Deleting or pruning any paper with authors fails with "database disk image is malformed" — Remove Paper, manual prune, and auto-prune all dead on arrival (FTS author-delete trigger corrupts contentless index during the cascade) | Critical |
 | | R8-4 | Prune deletes fetched papers whose source tarball was downloaded (local_source_path set, no PDF) and orphans the extracted source directory on disk forever | High |
 | | R8-6 | DatabaseConnection.close() was reversible — any post-close access silently reopened the old DB file, letting a worker that outlived a relocation race the copy/merge | High |
+| | R8-5 | Library relocation ignored whether download workers actually stopped (wait() result discarded) and closed the DB anyway — a surviving worker could corrupt the copied/merged database | High |
 | | R2-3 | SQL interleaving across threads can corrupt database | Critical |
 | | R1-3 | HTTP response stream leak — sockets accumulate | High |
 | | R2-9 | Same stream leak in PDFService code path | High |

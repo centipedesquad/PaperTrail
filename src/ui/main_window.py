@@ -236,14 +236,26 @@ class MainWindow(QMainWindow):
             worker.deleteLater()
             setattr(self, worker_attr, None)
 
-    def _stop_all_workers(self):
-        """Cancel and wait on all active workers."""
+    def _stop_all_workers(self) -> bool:
+        """Cancel and wait on all active workers.
+
+        Returns False if any worker did not stop within the timeout. Callers that
+        are about to close the database (library relocation/merge) MUST abort when
+        this returns False: a download worker whose socket read outlasts the
+        timeout keeps running, and after close_database() its write would either
+        race the copy/merge or (now) raise. Better to refuse the relocation and
+        ask the user to wait.
+        """
+        all_stopped = True
         for attr in ['fetch_worker', 'pdf_worker', 'source_worker',
                       'arxiv_id_worker', 'arxiv_search_worker']:
             worker = getattr(self, attr, None)
             if worker and worker.isRunning():
                 worker.cancel()
-                worker.wait(3000)
+                if not worker.wait(3000):
+                    logger.warning(f"Worker {attr} did not stop within timeout")
+                    all_stopped = False
+        return all_stopped
 
     def _push_wait_cursor(self):
         """Push a wait cursor (nestable)."""

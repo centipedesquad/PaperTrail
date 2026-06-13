@@ -418,3 +418,58 @@ class TestClosedConnectionRegression:
             db.execute("INSERT INTO t (x) VALUES (1)")
         with pytest.raises(RuntimeError):
             db.connect()
+
+
+# ── Regression: relocation closes DB while a worker survives (R8-5) ──
+
+class _FakeWorker:
+    """Stand-in QThread-like worker for testing _stop_all_workers."""
+
+    def __init__(self, running: bool, stops: bool):
+        self._running = running
+        self._stops = stops
+        self.cancelled = False
+
+    def isRunning(self):
+        return self._running
+
+    def cancel(self):
+        self.cancelled = True
+
+    def wait(self, ms):
+        return self._stops
+
+
+class TestStopAllWorkersRegression:
+    """_stop_all_workers must report whether every worker actually stopped.
+
+    Before the fix it called worker.wait(3000) but ignored the result and the
+    caller (ChangeLibraryDialog._on_apply) closed the DB and migrated regardless.
+    A download whose socket read outlasted the timeout kept running and raced the
+    copy/merge. Now the method returns False and the caller aborts.
+    """
+
+    def _stub(self, **workers):
+        from types import SimpleNamespace
+        base = dict(fetch_worker=None, pdf_worker=None, source_worker=None,
+                    arxiv_id_worker=None, arxiv_search_worker=None)
+        base.update(workers)
+        return SimpleNamespace(**base)
+
+    def test_returns_false_when_a_worker_will_not_stop(self):
+        from ui.main_window import MainWindow
+        stub = self._stub(pdf_worker=_FakeWorker(running=True, stops=False))
+        assert MainWindow._stop_all_workers(stub) is False
+        assert stub.pdf_worker.cancelled is True  # it tried to cancel
+
+    def test_returns_true_when_all_workers_stop(self):
+        from ui.main_window import MainWindow
+        stub = self._stub(
+            fetch_worker=_FakeWorker(running=True, stops=True),
+            source_worker=_FakeWorker(running=False, stops=True),
+        )
+        assert MainWindow._stop_all_workers(stub) is True
+
+    def test_returns_true_when_no_workers(self):
+        from ui.main_window import MainWindow
+        assert MainWindow._stop_all_workers(self._stub()) is True
